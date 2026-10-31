@@ -1,4 +1,8 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { ApiExceptionFilter } from './common/filters/api-exception.filter';
+import { createApiValidationPipe } from './common/pipes/api-validation.pipe';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -17,9 +21,17 @@ import { NotificationsModule } from './notifications/notifications.module';
     AuthModule,
     RoomsModule,
     BookingsModule,
-    NotificationsModule
+    NotificationsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    { provide: APP_FILTER, useClass: ApiExceptionFilter },
+    { provide: APP_PIPE, useFactory: createApiValidationPipe },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('{*path}');
+  }
+}

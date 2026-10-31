@@ -1,98 +1,187 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Hotel Booking API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+โปรเจกต์ทีม 3 คน ใช้ NestJS 11 + TypeScript สำหรับระบบจองห้องพัก
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## สถานะปัจจุบัน
 
-## Description
+ทำแล้ว: Register, Login ด้วย JWT, ดูข้อมูลตัวเอง, JWT/Role Guards, Validation, Error Filter กลาง และ Request ID
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+ข้อมูลผู้ใช้ยังอยู่ใน Array ใน `UsersRepository` และหายทุกครั้งที่แอปรีสตาร์ต รวมถึงเมื่อ watch mode โหลดโค้ดใหม่ แต่ละ process มีข้อมูลแยกกัน เหมาะสำหรับพัฒนาระหว่างรอ ORM เท่านั้น
 
-## Project setup
+ยังต้องทำ: เชื่อม ORM/Database, unique constraint ของ email, Seed, แก้โปรไฟล์, Logout/เพิกถอน Token ผ่าน Redis, rate limiting, Health check และ API ของ Rooms/Bookings/Notifications ตอนนี้ Guard ยังไม่ตรวจ Token ที่ถูกเพิกถอน และไม่มีบัญชี ADMIN จากการสมัครทั่วไป
+
+## Setup ครั้งแรก
+
+ใช้ Node.js ตาม `.nvmrc` (24.14.0) และ npm
 
 ```bash
-$ npm install
+# ถ้าใช้ nvm
+nvm install
+nvm use
+
+npm ci
+cp .env.example .env
 ```
 
-## Compile and run the project
+Windows PowerShell ใช้ `Copy-Item .env.example .env` แทนคำสั่ง copy ข้างบน
+
+สร้าง Secret ของเครื่องตัวเอง:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-## Run tests
+นำผลลัพธ์ไปใส่ `JWT_SECRET` ใน `.env` และใช้ `JWT_EXPIRES_IN=900` (15 นาที) แอปจะปฏิเสธ Secret ที่ว่าง/เป็นค่าตัวอย่าง และอายุ Token ที่ไม่ใช่จำนวนเต็มบวก อย่าส่ง `.env` หรือ Secret จริงขึ้น Git
+
+| Environment | หน้าที่ |
+| --- | --- |
+| `PORT` | พอร์ต API ค่าเริ่มต้น 3000 |
+| `JWT_SECRET` | Secret สำหรับลงลายเซ็นและตรวจ JWT |
+| `JWT_EXPIRES_IN` | อายุ Token หน่วยวินาที ค่าในตัวอย่าง 900 |
+| `TZ` | เขตเวลาเครื่องพัฒนา ในตัวอย่างใช้ Asia/Bangkok |
+| `DATABASE_URL`, `REDIS_URL` | เตรียมไว้สำหรับเชื่อมบริการภายหลัง ยังไม่ได้ใช้ในโค้ดปัจจุบัน |
+
+ตอนนี้ยังไม่ต้องเปิด Database/Redis เพื่อทดลอง Auth เมื่อคนที่ 2 เพิ่ม ORM/Compose แล้วต้องอัปเดตขั้นตอนนี้ร่วมกัน
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run build
+npm run start:dev
 ```
 
-## Deployment
+- Business API: `http://localhost:3000/api/v1`
+- Swagger: `http://localhost:3000/docs`
+- OpenAPI JSON: `http://localhost:3000/docs-json`
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Swagger เปิดใช้งานแล้ว แต่รายละเอียด DTO/Response และ Authentication ของแต่ละ route ยังต้องเพิ่มให้ครบ ถ้าเจอ `EADDRINUSE` ให้หยุดเซิร์ฟเวอร์เดิมด้วย Ctrl+C และเปิดเพียงหนึ่งตัว
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## ลอง Register, Login และ Profile
+
+เปิด Terminal อีกแท็บขณะเซิร์ฟเวอร์ทำงาน สมัครใหม่หลังรีสตาร์ตแอป:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+curl -i -X POST http://localhost:3000/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Mint","email":"mint@example.com","password":"TestPassword123!"}'
+
+curl -i -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"mint@example.com","password":"TestPassword123!"}'
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Login สำเร็จได้ HTTP 200 และ `{ data: { accessToken, tokenType, expiresIn, user }, message }` ให้นำ `data.accessToken` มาแทน `YOUR_TOKEN` ทั้งหมด โดยคง `Bearer` และช่องว่างไว้:
 
-## Resources
+```bash
+curl -i http://localhost:3000/api/v1/users/me \
+  -H 'Authorization: Bearer YOUR_TOKEN'
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+Token ถูกต้องได้ 200 ไม่มี/ผิด/หมดอายุได้ 401 Login ผิดได้ 401 อีเมลสมัครซ้ำได้ 409 ข้อมูลไม่ผ่าน Validation ได้ 400 ไม่คืน password หรือ passwordHash
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+ข้อที่ยังต่างจาก API Agreement: Register ปัจจุบันคืน `{ user, message }` ต้องปรับเป็น `{ data, message }` และเพิ่ม Location header สำหรับ Create ให้ครบก่อนส่ง API ฉบับสมบูรณ์
 
-## Support
+## ให้โมดูลของเพื่อนใช้ Guard
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+ในโมดูลของตัวเอง เพิ่ม `TokenModule` ใน `imports` โดยเก็บรายการเดิมไว้ด้วย (ปรับ relative path ตามตำแหน่งไฟล์):
 
-## Stay in touch
+```ts
+import { TokenModule } from '../auth/token.module';
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+@Module({
+  imports: [TokenModule],
+  // controllers และ providers ของโมดูลตัวเอง
+})
+export class RoomsModule {}
+```
 
-## License
+API ที่ต้อง Login ใช้ `@UseGuards(JwtAuthGuard)` ส่วน API สำหรับ Admin ใช้ JWT Guard ก่อน Roles Guard เสมอ:
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+```ts
+import { Controller, Post, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+
+@Controller('rooms')
+export class RoomsController {
+  @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  createRoom() {
+    // เรียก Service ของโมดูลตัวเอง
+  }
+}
+```
+
+นี่เป็นตัวอย่างวิธีใช้ ไม่ใช่ Rooms API ที่ทำเสร็จแล้ว การ import TokenModule อย่างเดียวไม่เปิด Guard อัตโนมัติ Public routes ไม่ต้องใส่ Guard
+
+หลัง JWT Guard ตรวจผ่าน จะมี:
+
+```ts
+request.user = { id: 'user-uuid', role: 'USER' }; // หรือ ADMIN
+```
+
+อ่านผู้ใช้ใน Controller ได้ด้วย:
+
+```ts
+import { Req } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
+
+// ภายใน method ที่ป้องกันด้วย JwtAuthGuard
+// @Req() request: AuthenticatedRequest
+// ใช้ request.user.id และ request.user.role
+```
+
+ใช้ `request.user.id` เป็นเจ้าของ Booking ห้ามเชื่อถือ userId/role ที่ client ส่งมา การตรวจว่าเป็นเจ้าของ resource ต้องทำเพิ่มในโมดูลนั้นเอง Guard ตรวจ Token/Role ไม่ได้ตรวจ Ownership ให้
+
+JWT มี `sub` (รหัสผู้ใช้), `role`, `jti` (รหัส Token), `iat`, `exp` และใช้ HS256 ชื่อ role ใช้ตัวพิมพ์ใหญ่ `USER`/`ADMIN` เสมอ Register สร้างได้เฉพาะ USER บัญชี ADMIN ใน E2E test เป็นข้อมูลจำลองเฉพาะเทสต์ ไม่ใช่บัญชีที่ใช้กับแอปที่กำลังรัน
+
+## Error และ Validation กลาง
+
+AppModule ลงทะเบียน Validation Pipe และ Error Filter แบบ global แล้ว โมดูลอื่นไม่ต้องลงทะเบียนซ้ำ DTO ต้องใส่ decorator ของ class-validator เพื่อให้ตรวจข้อมูลได้ ฟิลด์ที่ไม่ได้ประกาศจะถูกปฏิเสธ
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid request data",
+    "details": [{ "field": "email", "message": "email must be an email" }]
+  },
+  "requestId": "request-uuid"
+}
+```
+
+ทุกคำขอมี Header `X-Request-Id` และใน Error JSON จะใช้รหัสเดียวกัน details เป็น Array เสมอ ข้อผิดพลาด 5xx ส่งข้อความทั่วไปโดยไม่เปิดเผยรายละเอียดภายใน ขณะนี้ยังไม่ได้เพิ่มระบบ Log กลาง
+
+ถ้าต้องระบุ business error เฉพาะ ให้ใช้:
+
+```ts
+import { ApiException } from '../common/exceptions/api.exception';
+
+throw new ApiException(409, 'ROOM_UNAVAILABLE', 'Room unavailable');
+```
+
+รหัส Auth ที่มีแล้ว: `EMAIL_ALREADY_EXISTS`, `INVALID_CREDENTIALS`, `UNAUTHORIZED`, `FORBIDDEN`, `RESOURCE_NOT_FOUND` และ `VALIDATION_ERROR` ถ้าใช้ ConflictException ทั่วไปจะได้ `CONFLICT` จึงควรใช้ ApiException เมื่อต้องการรหัสตาม Agreement
+
+## ทดสอบ
+
+ตั้ง `.env` ให้เรียบร้อยก่อนรันเทสต์ ยังไม่ต้องเปิดเซิร์ฟเวอร์แยก เทสต์สร้างแอปและข้อมูลในหน่วยความจำเอง
+
+```bash
+npm run build
+npm test -- --runInBand
+npm run test:e2e -- --runInBand
+```
+
+E2E ครอบคลุม Register/Login/Profile, Token ผิด/ไม่มี, ADMIN ได้ 200/USER ได้ 403, Request ID, Validation, อีเมลซ้ำ, Login ผิด และการปิดบัง Error ภายใน Route `test-admin` มีเฉพาะแอปในเทสต์ ไม่ใช่ API จริง
+
+## ทำงานร่วมกัน
+
+- คนที่ 1: Users/Auth, JWT/Role Guards, Validation และ Error กลาง (`feat/auth`)
+- คนที่ 2: Database/ORM, Rooms/RoomImages, Seed และ Compose (`feat/rooms`)
+- คนที่ 3: Bookings/Notifications และกติกาวันที่/การจอง (`feat/bookings`)
+
+ก่อนแก้ไฟล์กลาง เช่น app.module.ts, package.json, package-lock.json, ORM schema และ Migration ให้แจ้งทีม คนที่ 2 ประสานการรวม schema/migration เปลี่ยน Repository ให้ใช้ ORM ภายหลังโดยรักษาพฤติกรรมและแก้การเรียก async ให้สอดคล้องกัน
+
+Commit package-lock.json เสมอ ผู้รับโค้ดใช้ npm ci รวมงานผ่าน Pull Request และให้เพื่อนตรวจอย่างน้อยหนึ่งคนก่อนเข้า main ไม่ส่ง .env, node_modules หรือ dist ขึ้น Git
+
+เอกสารอ้างอิงใน repo: Project_Description.pdf, Hotel_Booking_API_Agreement.pdf และ Hotel_Booking_Database_Simple.pdf โครงปัจจุบันเป็นฐานพัฒนา ยังไม่ใช่ระบบที่ทำครบทุกข้อในเอกสาร
