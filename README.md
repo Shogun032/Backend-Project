@@ -6,11 +6,13 @@
 
 ทำแล้ว: Register, Login ด้วย JWT, ดูข้อมูลตัวเอง, JWT/Role Guards, Validation, Error Filter กลาง และ Request ID
 
-ข้อมูลผู้ใช้ยังอยู่ใน Array ใน `UsersRepository` และหายทุกครั้งที่แอปรีสตาร์ต รวมถึงเมื่อ watch mode โหลดโค้ดใหม่ แต่ละ process มีข้อมูลแยกกัน เหมาะสำหรับพัฒนาระหว่างรอ ORM เท่านั้น
+ข้อมูลผู้ใช้บันทึกใน MySQL ผ่าน UsersRepository → PrismaService แล้ว ไม่หายเมื่อแอปรีสตาร์ต PrismaModule เปิดให้โมดูลอื่นใช้ตัวเชื่อมร่วมกัน และปิดการเชื่อมต่อเมื่อแอปถูกปิดผ่าน Nest lifecycle
 
 รวมฐานงานคนที่ 2 แล้ว: Prisma 6 + MySQL, migration ของ Room/RoomImage, seed ห้องตัวอย่าง, Docker Compose สำหรับ MySQL/Redis และโครง RoomsModule
 
-ยังต้องทำ: ตาราง User/Booking/Notification, เชื่อม UsersRepository กับ ORM, unique constraint ของ email, แก้โปรไฟล์, Logout/เพิกถอน Token ผ่าน Redis, rate limiting, Health check และ API ของ Rooms/Bookings/Notifications ตอนนี้ Guard ยังไม่ตรวจ Token ที่ถูกเพิกถอน และไม่มีบัญชี ADMIN จากการสมัครทั่วไป
+เพิ่ม User model/migration และเชื่อม Auth กับ MySQL แล้ว email เป็น unique โดยจัดการคำขอสมัครซ้ำพร้อมกันด้วย constraint ของฐานข้อมูล
+
+ยังต้องทำ: ตาราง Booking/Notification, แก้โปรไฟล์, Logout/เพิกถอน Token ผ่าน Redis, rate limiting, Health check และ API ของ Rooms/Bookings/Notifications ตอนนี้ Guard ยังไม่ตรวจ Token ที่ถูกเพิกถอน และไม่มีบัญชี ADMIN จากการสมัครทั่วไป
 
 ## Setup ครั้งแรก
 
@@ -41,9 +43,11 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `JWT_SECRET` | Secret สำหรับลงลายเซ็นและตรวจ JWT |
 | `JWT_EXPIRES_IN` | อายุ Token หน่วยวินาที ค่าในตัวอย่าง 900 |
 | `TZ` | เขตเวลาเครื่องพัฒนา ในตัวอย่างใช้ Asia/Bangkok |
-| `DATABASE_URL`, `REDIS_URL` | DATABASE_URL ใช้กับ Prisma CLI/seed; REDIS_URL เตรียมไว้ ยังไม่เชื่อมกับ Auth |
+| `DATABASE_URL`, `REDIS_URL` | DATABASE_URL ใช้กับ Prisma และ Auth; REDIS_URL เตรียมไว้ ยังไม่เชื่อมกับ Auth |
 
-ตอนนี้ยังไม่ต้องเปิด Database/Redis เพื่อทดลอง Auth เพราะ UsersRepository ยังใช้ Array ส่วนขั้นตอนฐานข้อมูลห้องอยู่ด้านล่าง
+ต้องเปิด MySQL และรัน migration ตามหัวข้อ Database/Redis ด้านล่างก่อนเริ่มแอป Redis ยังไม่เชื่อมกับ Auth
+
+หลัง npm ci ให้สร้าง Prisma Client ตาม schema ล่าสุดด้วย `npx prisma generate`
 
 ```bash
 npm run build
@@ -86,13 +90,13 @@ npx prisma migrate deploy
 npx prisma db seed
 ```
 
-**Seed ปัจจุบันล้าง RoomImage และ Room ทั้งหมดก่อนสร้างห้องตัวอย่าง 5 ห้อง** อย่ารันกับฐานข้อมูลที่มีข้อมูลต้องเก็บ รูปใน seed เป็น URL ตัวอย่าง Schema ตอนนี้มีเฉพาะ Room/RoomImage ยังไม่ทำให้ผู้ใช้จาก Register ถูกบันทึกลง MySQL และ RoomsController ยังไม่มี endpoint ใช้งาน
+**Seed ปัจจุบันล้าง RoomImage และ Room ทั้งหมดก่อนสร้างห้องตัวอย่าง 5 ห้อง** อย่ารันกับฐานข้อมูลที่มีข้อมูลต้องเก็บ รูปใน seed เป็น URL ตัวอย่าง Schema มี User/Room/RoomImage และผู้ใช้จาก Register บันทึกลง MySQL แล้ว RoomsController ยังไม่มี endpoint ใช้งาน
 
 Compose เปิดพอร์ต MySQL/Redis สำหรับพัฒนาในเครื่อง ยังไม่ใช่ configuration สำหรับ deploy production
 
 ## ลอง Register, Login และ Profile
 
-เปิด Terminal อีกแท็บขณะเซิร์ฟเวอร์ทำงาน สมัครใหม่หลังรีสตาร์ตแอป:
+เปิด Terminal อีกแท็บขณะเซิร์ฟเวอร์ทำงาน สมัครครั้งแรกตามตัวอย่าง หากอีเมลนี้มีอยู่แล้วจะได้ 409 ให้ Login ต่อได้ ไม่ต้องสมัครใหม่หลังรีสตาร์ตแอป:
 
 ```bash
 curl -i -X POST http://localhost:3000/api/v1/auth/register \
@@ -200,7 +204,16 @@ throw new ApiException(409, 'ROOM_UNAVAILABLE', 'Room unavailable');
 
 ## ทดสอบ
 
-ตั้ง `.env` ให้เรียบร้อยก่อนรันเทสต์ ยังไม่ต้องเปิดเซิร์ฟเวอร์แยก เทสต์สร้างแอปและข้อมูลในหน่วยความจำเอง
+Unit tests ไม่ต้องใช้ฐานข้อมูล ส่วน E2E ใช้ MySQL จริงและไม่ต้องเปิดเซิร์ฟเวอร์แยก
+
+สร้างฐานข้อมูลสำหรับทดสอบชื่อ `hotel_booking_test` แยกจากฐานข้อมูลพัฒนา แล้วกำหนด TEST_DATABASE_URL ใน Terminal (แก้ค่าตัวอย่างให้ตรงกับ MySQL ของตัวเอง):
+
+```bash
+export TEST_DATABASE_URL='mysql://root:change_me@localhost:3306/hotel_booking_test'
+DATABASE_URL="$TEST_DATABASE_URL" npx prisma migrate deploy
+```
+
+E2E จะหยุดทันทีถ้าไม่มี TEST_DATABASE_URL หรือชื่อฐานข้อมูลไม่ลงท้าย `_test` เพื่อไม่ให้เขียนลงฐานข้อมูลพัฒนาโดยเผลอ เทสต์สร้างบัญชีชื่อเฉพาะแต่ละรอบและลบเฉพาะบัญชีที่ตัวเองสร้างเมื่อเสร็จ ถ้าเทสต์ถูกหยุดกลางทางอาจมีข้อมูลทดสอบค้างอยู่
 
 ```bash
 npm run build
@@ -208,7 +221,7 @@ npm test -- --runInBand
 npm run test:e2e -- --runInBand
 ```
 
-E2E ครอบคลุม Register/Login/Profile, Token ผิด/ไม่มี, ADMIN ได้ 200/USER ได้ 403, Request ID, Validation, อีเมลซ้ำ, Login ผิด และการปิดบัง Error ภายใน Route `test-admin` มีเฉพาะแอปในเทสต์ ไม่ใช่ API จริง
+E2E ครอบคลุมข้อมูลคงอยู่หลังสร้างแอปใหม่, สมัครพร้อมกันและ unique constraint, Register/Login/Profile, Token ผิด/ไม่มี, ADMIN ได้ 200/USER ได้ 403, Request ID, Validation, อีเมลซ้ำ, Login ผิด และการปิดบัง Error ภายใน Route `test-admin` มีเฉพาะแอปในเทสต์ ไม่ใช่ API จริง
 
 ## ทำงานร่วมกัน
 
@@ -216,7 +229,7 @@ E2E ครอบคลุม Register/Login/Profile, Token ผิด/ไม่�
 - คนที่ 2: Database/ORM, Rooms/RoomImages, Seed และ Compose (`feat/rooms`)
 - คนที่ 3: Bookings/Notifications และกติกาวันที่/การจอง (`feat/bookings`)
 
-ก่อนแก้ไฟล์กลาง เช่น app.module.ts, package.json, package-lock.json, ORM schema และ Migration ให้แจ้งทีม คนที่ 2 ประสานการรวม schema/migration เปลี่ยน Repository ให้ใช้ ORM ภายหลังโดยรักษาพฤติกรรมและแก้การเรียก async ให้สอดคล้องกัน
+ก่อนแก้ไฟล์กลาง เช่น app.module.ts, package.json, package-lock.json, ORM schema และ Migration ให้แจ้งทีม คนที่ 2 ประสานการรวม schema/migration UsersRepository ใช้ Prisma แล้ว เมธอดค้นหาคืน Promise<User | null> และ create คืน Promise<User> ผู้เรียกต้อง await เมื่อจะใช้ผลลัพธ์
 
 Commit package-lock.json เสมอ ผู้รับโค้ดใช้ npm ci รวมงานผ่าน Pull Request และให้เพื่อนตรวจอย่างน้อยหนึ่งคนก่อนเข้า main ไม่ส่ง .env, node_modules หรือ dist ขึ้น Git
 

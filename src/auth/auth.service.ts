@@ -20,7 +20,7 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<Omit<User, 'passwordHash'>> {
-    const existingUser = this.usersService.findByEmail(dto.email);
+    const existingUser = await this.usersService.findByEmail(dto.email);
 
     if (existingUser) {
       throw new ApiException(
@@ -32,17 +32,9 @@ export class AuthService {
 
     const passwordHash = await argon2.hash(dto.password);
 
-    if (this.usersService.findByEmail(dto.email)) {
-      throw new ApiException(
-        409,
-        'EMAIL_ALREADY_EXISTS',
-        'Email already exists',
-      );
-    }
-
     const now = new Date();
 
-    const user = this.usersService.create({
+    const user = await this.usersService.create({
       id: randomUUID(),
       name: dto.name,
       email: dto.email,
@@ -63,7 +55,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = this.usersService.findByEmail(dto.email);
+    const user = await this.usersService.findByEmail(dto.email);
 
     if (!user) {
       throw new ApiException(
