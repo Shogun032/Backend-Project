@@ -8,7 +8,9 @@
 
 ข้อมูลผู้ใช้ยังอยู่ใน Array ใน `UsersRepository` และหายทุกครั้งที่แอปรีสตาร์ต รวมถึงเมื่อ watch mode โหลดโค้ดใหม่ แต่ละ process มีข้อมูลแยกกัน เหมาะสำหรับพัฒนาระหว่างรอ ORM เท่านั้น
 
-ยังต้องทำ: เชื่อม ORM/Database, unique constraint ของ email, Seed, แก้โปรไฟล์, Logout/เพิกถอน Token ผ่าน Redis, rate limiting, Health check และ API ของ Rooms/Bookings/Notifications ตอนนี้ Guard ยังไม่ตรวจ Token ที่ถูกเพิกถอน และไม่มีบัญชี ADMIN จากการสมัครทั่วไป
+รวมฐานงานคนที่ 2 แล้ว: Prisma 6 + MySQL, migration ของ Room/RoomImage, seed ห้องตัวอย่าง, Docker Compose สำหรับ MySQL/Redis และโครง RoomsModule
+
+ยังต้องทำ: ตาราง User/Booking/Notification, เชื่อม UsersRepository กับ ORM, unique constraint ของ email, แก้โปรไฟล์, Logout/เพิกถอน Token ผ่าน Redis, rate limiting, Health check และ API ของ Rooms/Bookings/Notifications ตอนนี้ Guard ยังไม่ตรวจ Token ที่ถูกเพิกถอน และไม่มีบัญชี ADMIN จากการสมัครทั่วไป
 
 ## Setup ครั้งแรก
 
@@ -39,9 +41,9 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `JWT_SECRET` | Secret สำหรับลงลายเซ็นและตรวจ JWT |
 | `JWT_EXPIRES_IN` | อายุ Token หน่วยวินาที ค่าในตัวอย่าง 900 |
 | `TZ` | เขตเวลาเครื่องพัฒนา ในตัวอย่างใช้ Asia/Bangkok |
-| `DATABASE_URL`, `REDIS_URL` | เตรียมไว้สำหรับเชื่อมบริการภายหลัง ยังไม่ได้ใช้ในโค้ดปัจจุบัน |
+| `DATABASE_URL`, `REDIS_URL` | DATABASE_URL ใช้กับ Prisma CLI/seed; REDIS_URL เตรียมไว้ ยังไม่เชื่อมกับ Auth |
 
-ตอนนี้ยังไม่ต้องเปิด Database/Redis เพื่อทดลอง Auth เมื่อคนที่ 2 เพิ่ม ORM/Compose แล้วต้องอัปเดตขั้นตอนนี้ร่วมกัน
+ตอนนี้ยังไม่ต้องเปิด Database/Redis เพื่อทดลอง Auth เพราะ UsersRepository ยังใช้ Array ส่วนขั้นตอนฐานข้อมูลห้องอยู่ด้านล่าง
 
 ```bash
 npm run build
@@ -53,6 +55,40 @@ npm run start:dev
 - OpenAPI JSON: `http://localhost:3000/docs-json`
 
 Swagger เปิดใช้งานแล้ว แต่รายละเอียด DTO/Response และ Authentication ของแต่ละ route ยังต้องเพิ่มให้ครบ ถ้าเจอ `EADDRINUSE` ให้หยุดเซิร์ฟเวอร์เดิมด้วย Ctrl+C และเปิดเพียงหนึ่งตัว
+
+## Database/Redis จาก branch คนที่ 2
+
+ติดตั้งและเปิด Docker ก่อน หากมี `.env` อยู่แล้วให้เพิ่มค่าจาก `.env.example` โดยรักษา JWT_SECRET เดิมไว้:
+
+```dotenv
+MYSQL_ROOT_PASSWORD=change_me
+MYSQL_DATABASE=hotel_booking
+MYSQL_PORT=3306
+REDIS_PORT=6379
+DATABASE_URL="mysql://root:change_me@localhost:3306/hotel_booking"
+REDIS_URL="redis://localhost:6379"
+```
+
+ค่าข้างบนเป็นตัวอย่างสำหรับพัฒนาในเครื่อง ให้รหัสผ่าน/พอร์ตใน DATABASE_URL ตรงกับ Compose ถ้า MySQL volume เคยสร้างแล้ว การเปลี่ยนตัวแปรรหัสผ่านจะไม่เปลี่ยนรหัสผ่านในฐานข้อมูลเดิมอัตโนมัติ
+
+```bash
+docker compose up -d
+docker compose ps
+npx prisma generate
+npx prisma migrate deploy
+```
+
+รอ MySQL และ Redis healthy ก่อน migrate ตรวจข้อมูลผ่าน `npx prisma studio` ได้ หลังใช้งานหยุดบริการด้วย `docker compose stop` โดยไม่ลบ volume
+
+สำหรับฐานข้อมูลพัฒนาที่ไม่มีข้อมูลต้องเก็บเท่านั้น:
+
+```bash
+npx prisma db seed
+```
+
+**Seed ปัจจุบันล้าง RoomImage และ Room ทั้งหมดก่อนสร้างห้องตัวอย่าง 5 ห้อง** อย่ารันกับฐานข้อมูลที่มีข้อมูลต้องเก็บ รูปใน seed เป็น URL ตัวอย่าง Schema ตอนนี้มีเฉพาะ Room/RoomImage ยังไม่ทำให้ผู้ใช้จาก Register ถูกบันทึกลง MySQL และ RoomsController ยังไม่มี endpoint ใช้งาน
+
+Compose เปิดพอร์ต MySQL/Redis สำหรับพัฒนาในเครื่อง ยังไม่ใช่ configuration สำหรับ deploy production
 
 ## ลอง Register, Login และ Profile
 
