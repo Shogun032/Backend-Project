@@ -1,4 +1,3 @@
-
 import { Injectable } from '@nestjs/common';
 import { ApiException } from '../common/exceptions/api.exception';
 import { ConfigService } from '@nestjs/config';
@@ -18,9 +17,7 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-
   async register(dto: RegisterDto): Promise<Omit<User, 'passwordHash'>> {
-
     const existingUser = await this.usersService.findByEmail(dto.email);
 
     if (existingUser) {

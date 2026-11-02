@@ -1,324 +1,213 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
-
+import { Booking, BookingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateBookingDto } from './dto/create-booking.dto';
 import { ApiException } from '../common/exceptions/api.exception';
+import { paginationMeta } from '../common/dto/pagination.dto';
+import { CreateBookingDto } from './dto/create-booking.dto';
+import { AdminListBookingsDto, ListBookingsDto } from './dto/list-bookings.dto';
+import {
+  assertStatusTransition,
+  blockingOverlap,
+  dateOnly,
+  parseBookingDates,
+} from './booking-rules';
+
+function bookingResponse(booking: Booking) {
+  return {
+    ...booking,
+    checkIn: dateOnly(booking.checkIn),
+    checkOut: dateOnly(booking.checkOut),
+    pricePerNight: booking.pricePerNight.toFixed(2),
+    totalPrice: booking.totalPrice.toFixed(2),
+  };
+}
 
 @Injectable()
 export class BookingsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Create a new booking
-  async create(userId: string, dto: CreateBookingDto) {
-    const checkIn = new Date(`${dto.checkIn}T00:00:00.000Z`);
-    const checkOut = new Date(`${dto.checkOut}T00:00:00.000Z`);
-
-    if (
-      Number.isNaN(checkIn.getTime()) ||
-      Number.isNaN(checkOut.getTime()) ||
-      checkIn.toISOString().slice(0, 10) !== dto.checkIn ||
-      checkOut.toISOString().slice(0, 10) !== dto.checkOut
-    ) {
-      throw new ApiException(400, 'INVALID_DATE', 'Invalid booking date');
-    }
-
-    const today = new Date().toLocaleDateString('en-CA', {
-      timeZone: 'Asia/Bangkok',
-    });
-
-    if (dto.checkIn < today || dto.checkOut <= dto.checkIn) {
-      throw new ApiException(
-        400,
-        'INVALID_DATE_RANGE',
-        'Invalid check-in or check-out date',
-      );
-    }
-
-    const nights =
-      (checkOut.getTime() - checkIn.getTime()) /
-      (1000 * 60 * 60 * 24);
-
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`
-        SELECT id FROM rooms
-        WHERE id = ${dto.roomId}
-        FOR UPDATE
-      `;
-
-      const room = await tx.room.findUnique({
-        where: { id: dto.roomId },
+  private async writeTransaction<T>(
+    work: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    try {
+      // Read again after taking the Room lock, without an earlier snapshot.
+      return await this.prisma.$transaction(work, {
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        maxWait: 5_000,
+        timeout: 10_000,
       });
-
-      if (!room || !room.isActive) {
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        ['P2034', 'P2028', 'P2024', 'P1001', 'P1002', 'P1017'].includes(
+          error.code,
+        )
+      ) {
         throw new ApiException(
-          404,
-          'ROOM_NOT_FOUND',
-          'Room not found or inactive',
+          503,
+          'SERVICE_UNAVAILABLE',
+          'Service temporarily unavailable; please retry',
         );
       }
+      throw error;
+    }
+  }
 
+  private async lockRoom(tx: Prisma.TransactionClient, roomId: string) {
+    await tx.$queryRaw`SELECT id FROM rooms WHERE id = ${roomId} FOR UPDATE`;
+  }
+
+  async create(userId: string, dto: CreateBookingDto) {
+    const { checkIn, checkOut, nights } = parseBookingDates(
+      dto.checkIn,
+      dto.checkOut,
+    );
+    const booking = await this.writeTransaction(async (tx) => {
+      await this.lockRoom(tx, dto.roomId);
+      const room = await tx.room.findUnique({ where: { id: dto.roomId } });
+      if (!room)
+        throw new ApiException(404, 'RESOURCE_NOT_FOUND', 'Room not found');
+      if (!room.isActive)
+        throw new ApiException(409, 'ROOM_UNAVAILABLE', 'Room unavailable');
       if (dto.guests > room.capacity) {
         throw new ApiException(
           400,
-          'GUESTS_EXCEED_CAPACITY',
+          'VALIDATION_ERROR',
           'Guests exceed room capacity',
         );
       }
-
       const conflict = await tx.booking.findFirst({
-        where: {
-          roomId: dto.roomId,
-          status: { in: ['PENDING', 'APPROVED', 'PAID'] },
-          checkIn: { lt: checkOut },
-          checkOut: { gt: checkIn },
-        },
+        where: { roomId: room.id, ...blockingOverlap(checkIn, checkOut) },
       });
+      if (conflict)
+        throw new ApiException(409, 'ROOM_UNAVAILABLE', 'Room unavailable');
 
-      if (conflict) {
-        throw new ApiException(
-          409,
-          'ROOM_NOT_AVAILABLE',
-          'Room is already booked for these dates',
-        );
-      }
-
-      const pricePerNight = room.pricePerNight;
-      const totalPrice = new Prisma.Decimal(
-        pricePerNight.toString(),
-      ).mul(nights);
-
-      const booking = await tx.booking.create({
+      const created = await tx.booking.create({
         data: {
-          id: randomUUID(),
           userId,
-          roomId: dto.roomId,
+          roomId: room.id,
           checkIn,
           checkOut,
+          nights,
           guests: dto.guests,
           status: 'PENDING',
-          nights,
-          pricePerNight,
-          totalPrice,
+          pricePerNight: room.pricePerNight,
+          totalPrice: room.pricePerNight.mul(nights),
           currency: 'THB',
         },
       });
-
       await tx.notification.create({
         data: {
-          id: randomUUID(),
-          bookingId: booking.id,
+          bookingId: created.id,
           type: 'BOOKING_CREATED',
-          message: 'Your booking has been created successfully',
+          message: 'Your booking has been created',
         },
       });
-
-      return booking;
+      return created;
     });
+    return bookingResponse(booking);
   }
 
-  // Get all bookings belonging to a user
-  async findAllByUser(userId: string) {
-    return this.prisma.booking.findMany({
-      where: { userId },
-      include: { room: true },
-      orderBy: { createdAt: 'desc' },
-    });
+  private async list(where: Prisma.BookingWhereInput, query: ListBookingsDto) {
+    const { page, limit } = query;
+    const [bookings, total] = await this.prisma.$transaction([
+      this.prisma.booking.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      }),
+      this.prisma.booking.count({ where }),
+    ]);
+    return {
+      data: bookings.map(bookingResponse),
+      meta: paginationMeta(page, limit, total),
+    };
   }
 
-  // Get one booking belonging to a user
+  findAllByUser(userId: string, query: ListBookingsDto) {
+    return this.list({ userId, status: query.status }, query);
+  }
+
   async findOneByUser(bookingId: string, userId: string) {
     const booking = await this.prisma.booking.findFirst({
-      where: {
-        id: bookingId,
-        userId,
-      },
-      include: {
-        room: true,
-      },
+      where: { id: bookingId, userId },
     });
-
-    if (!booking) {
-      throw new ApiException(
-        404,
-        'BOOKING_NOT_FOUND',
-        'Booking not found',
-      );
-    }
-
-    return booking;
+    if (!booking)
+      throw new ApiException(404, 'RESOURCE_NOT_FOUND', 'Booking not found');
+    return bookingResponse(booking);
   }
 
-  // Cancel a booking
-  async cancel(bookingId: string, userId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.findFirst({
-        where: {
-          id: bookingId,
-          userId,
-        },
-      });
-
-      if (!booking) {
-        throw new ApiException(
-          404,
-          'BOOKING_NOT_FOUND',
-          'Booking not found',
-        );
-      }
-
-      if (booking.status === 'CANCELLED') {
-        return booking;
-      }
-
-      if (!['PENDING', 'APPROVED'].includes(booking.status)) {
-        throw new ApiException(
-          400,
-          'BOOKING_CANNOT_BE_CANCELLED',
-          'This booking cannot be cancelled',
-        );
-      }
-
-      const today = new Date().toLocaleDateString('en-CA', {
-        timeZone: 'Asia/Bangkok',
-      });
-
-      const checkIn = booking.checkIn.toISOString().slice(0, 10);
-
-      if (today >= checkIn) {
-        throw new ApiException(
-          400,
-          'CANCELLATION_DEADLINE_PASSED',
-          'Booking cannot be cancelled on or after check-in date',
-        );
-      }
-
-      const updatedBooking = await tx.booking.update({
-        where: { id: bookingId },
-        data: { status: 'CANCELLED' },
-      });
-
-      await tx.notification.create({
-        data: {
-          id: randomUUID(),
-          bookingId: booking.id,
-          type: 'BOOKING_CANCELLED',
-          message: 'Your booking has been cancelled successfully',
-        },
-      });
-
-      return updatedBooking;
-    });
+  findAllForAdmin(query: AdminListBookingsDto) {
+    return this.list(
+      { status: query.status, userId: query.userId, roomId: query.roomId },
+      query,
+    );
   }
 
-  // Admin: Get all bookings from all users
-  async findAllForAdmin() {
-    return this.prisma.booking.findMany({
-      include: {
-        room: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-  }
-
-  // Admin: Get one booking by ID
   async findOneForAdmin(bookingId: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      include: {
-        room: true,
-      },
     });
-
-    if (!booking) {
-      throw new ApiException(
-        404,
-        'BOOKING_NOT_FOUND',
-        'Booking not found',
-      );
-    }
-
-    return booking;
+    if (!booking)
+      throw new ApiException(404, 'RESOURCE_NOT_FOUND', 'Booking not found');
+    return bookingResponse(booking);
   }
 
-  // Admin: Update booking status
-  async updateStatusByAdmin(
+  cancel(bookingId: string, userId: string, status: 'CANCELLED' = 'CANCELLED') {
+    return this.changeStatus(bookingId, status, userId);
+  }
+
+  updateStatusByAdmin(
     bookingId: string,
     status: 'APPROVED' | 'PAID' | 'CANCELLED',
   ) {
-    return this.prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.findUnique({
-        where: { id: bookingId },
-      });
+    return this.changeStatus(bookingId, status);
+  }
 
-      if (!booking) {
-        throw new ApiException(
-          404,
-          'BOOKING_NOT_FOUND',
-          'Booking not found',
-        );
+  private async changeStatus(
+    bookingId: string,
+    status: BookingStatus,
+    userId?: string,
+  ) {
+    const updated = await this.writeTransaction(async (tx) => {
+      const where = { id: bookingId, ...(userId ? { userId } : {}) };
+      const initial = await tx.booking.findFirst({ where });
+      if (!initial)
+        throw new ApiException(404, 'RESOURCE_NOT_FOUND', 'Booking not found');
+      await this.lockRoom(tx, initial.roomId);
+      const booking = await tx.booking.findFirst({ where });
+      if (!booking)
+        throw new ApiException(404, 'RESOURCE_NOT_FOUND', 'Booking not found');
+      assertStatusTransition(booking.status, status, booking.checkIn);
+      if (booking.status === status) return booking;
+
+      if (status === 'APPROVED') {
+        const conflict = await tx.booking.findFirst({
+          where: {
+            roomId: booking.roomId,
+            id: { not: booking.id },
+            ...blockingOverlap(booking.checkIn, booking.checkOut),
+          },
+        });
+        if (conflict)
+          throw new ApiException(409, 'ROOM_UNAVAILABLE', 'Room unavailable');
       }
-
-      // Repeating the same status does not create another notification
-      if (booking.status === status) {
-        return booking;
-      }
-
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-
-      if (status === 'APPROVED' && booking.status !== 'PENDING') {
-        throw new ApiException(
-          400,
-          'INVALID_STATUS_TRANSITION',
-          'Only PENDING bookings can be approved',
-        );
-      }
-
-      if (status === 'PAID' && booking.status !== 'APPROVED') {
-        throw new ApiException(
-          400,
-          'INVALID_STATUS_TRANSITION',
-          'Only APPROVED bookings can be marked as PAID',
-        );
-      }
-
-      if (status === 'CANCELLED') {
-        if (!['PENDING', 'APPROVED'].includes(booking.status)) {
-          throw new ApiException(
-            400,
-            'INVALID_STATUS_TRANSITION',
-            'This booking cannot be cancelled',
-          );
-        }
-
-        if (today >= booking.checkIn) {
-          throw new ApiException(
-            400,
-            'CANCELLATION_DEADLINE_PASSED',
-            'Booking cannot be cancelled on or after check-in date',
-          );
-        }
-      }
-
-      const updatedBooking = await tx.booking.update({
+      const result = await tx.booking.update({
         where: { id: bookingId },
         data: { status },
       });
-
-      await tx.notification.create({
-        data: {
-          id: randomUUID(),
-          bookingId,
-          type: `BOOKING_${status}`,
-          message: `Your booking status has been updated to ${status}`,
-        },
-      });
-
-      return updatedBooking;
+      if (status === 'CANCELLED') {
+        await tx.notification.create({
+          data: {
+            bookingId,
+            type: 'BOOKING_CANCELLED',
+            message: 'Your booking has been cancelled',
+          },
+        });
+      }
+      return result;
     });
+    return bookingResponse(updated);
   }
 }

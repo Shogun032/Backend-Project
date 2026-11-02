@@ -3,11 +3,14 @@ import {
   Controller,
   Get,
   Param,
+  ParseUUIDPipe,
+  Query,
   Patch,
   UseGuards,
 } from '@nestjs/common';
 
 import { BookingsService } from './bookings.service';
+import { AdminListBookingsDto } from './dto/list-bookings.dto';
 import { AdminUpdateBookingStatusDto } from './dto/admin-update-booking-status.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -21,18 +24,18 @@ export class AdminBookingsController {
 
   // Admin: Get all bookings
   @Get()
-  async findAll() {
-    const bookings = await this.bookingsService.findAllForAdmin();
+  async findAll(@Query() query: AdminListBookingsDto) {
+    const bookings = await this.bookingsService.findAllForAdmin(query);
 
     return {
-      data: bookings,
+      ...bookings,
       message: 'All bookings retrieved successfully',
     };
   }
 
   // Admin: Get booking details
   @Get(':bookingId')
-  async findOne(@Param('bookingId') bookingId: string) {
+  async findOne(@Param('bookingId', new ParseUUIDPipe()) bookingId: string) {
     const booking = await this.bookingsService.findOneForAdmin(bookingId);
 
     return {
@@ -44,7 +47,7 @@ export class AdminBookingsController {
   // Admin: Update booking status
   @Patch(':bookingId/status')
   async updateStatus(
-    @Param('bookingId') bookingId: string,
+    @Param('bookingId', new ParseUUIDPipe()) bookingId: string,
     @Body() dto: AdminUpdateBookingStatusDto,
   ) {
     const booking = await this.bookingsService.updateStatusByAdmin(

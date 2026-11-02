@@ -12,7 +12,29 @@
 
 เพิ่ม User model/migration และเชื่อม Auth กับ MySQL แล้ว email เป็น unique โดยจัดการคำขอสมัครซ้ำพร้อมกันด้วย constraint ของฐานข้อมูล
 
-ยังต้องทำ: ตาราง Booking/Notification, แก้โปรไฟล์, Logout/เพิกถอน Token ผ่าน Redis, rate limiting, Health check และ API ของ Rooms/Bookings/Notifications ตอนนี้ Guard ยังไม่ตรวจ Token ที่ถูกเพิกถอน และไม่มีบัญชี ADMIN จากการสมัครทั่วไป
+รวมฐานงานคนที่ 3 แล้ว: ตาราง Booking/Notification พร้อม migration, API สร้าง/ดู/ยกเลิก Booking, Admin เปลี่ยนสถานะ และรายการ Notification
+
+ยังต้องทำ: แก้โปรไฟล์, Logout/เพิกถอน Token ผ่าน Redis, rate limiting, Health check, Rooms CRUD/Search และ Swagger รายละเอียดของแต่ละ endpoint ตอนนี้ Guard ยังไม่ตรวจ Token ที่ถูกเพิกถอน และไม่มีบัญชี ADMIN จากการสมัครทั่วไป
+
+## ส่งต่องาน Sprint 1 และเริ่ม Sprint 2
+
+ฐานงาน Auth, Rooms/Database และ Bookings/Notifications รวมเข้าด้วยกันแล้ว พร้อมเทสต์ regression สำหรับการเชื่อมโมดูลและคำขอพร้อมกัน ผลตรวจชุดนี้: Build/ESLint ผ่าน, Unit tests 10 เคส และ E2E กับ MySQL จริง 17 เคสผ่าน
+
+หลังรับโค้ดล่าสุด ให้ commit งานใน branch ของตัวเองก่อน แล้วดึง main มารวมโดยไม่ทิ้งงานเดิม ผู้ที่อยู่ main และไม่มีงานค้างใช้:
+
+```bash
+git pull --ff-only origin main
+npm ci
+npx prisma generate
+docker compose up -d
+# รอ MySQL healthy ก่อนรันคำสั่งต่อไป
+npx prisma migrate deploy
+npm run start:dev
+```
+
+ต้องตั้ง `.env` ให้ตรงกับ MySQL ของเครื่องก่อนตามหัวข้อ Setup ด้านล่าง ไม่ต้อง reset ฐานข้อมูลหรือแก้ migration เดิม หลังอัปเดต schema ต้อง generate Client ใหม่เพื่อลดปัญหา Property 'user'/'booking' does not exist
+
+ให้สมาชิกแต่ละคนลอง setup/run บนเครื่องตนเองก่อนยืนยันปิด Sprint 1 การมีฐานงานพร้อมไม่ได้หมายความว่า FR ทั้งระบบเสร็จแล้ว งาน Sprint 2 ที่ยังค้างระบุไว้ในสถานะปัจจุบันข้างบน
 
 ## Setup ครั้งแรก
 
@@ -90,7 +112,7 @@ npx prisma migrate deploy
 npx prisma db seed
 ```
 
-**Seed ปัจจุบันล้าง RoomImage และ Room ทั้งหมดก่อนสร้างห้องตัวอย่าง 5 ห้อง** อย่ารันกับฐานข้อมูลที่มีข้อมูลต้องเก็บ รูปใน seed เป็น URL ตัวอย่าง Schema มี User/Room/RoomImage และผู้ใช้จาก Register บันทึกลง MySQL แล้ว RoomsController ยังไม่มี endpoint ใช้งาน
+**Seed ปัจจุบันล้าง RoomImage และ Room ทั้งหมดก่อนสร้างห้องตัวอย่าง 5 ห้อง** อย่ารันกับฐานข้อมูลที่มีข้อมูลต้องเก็บ รูปใน seed เป็น URL ตัวอย่าง Schema มี User/Room/RoomImage และผู้ใช้จาก Register บันทึกลง MySQL แล้ว RoomsController มีรายการห้อง Active เบื้องต้น แต่ยังไม่ครบ CRUD/Search และ pagination ตามข้อตกลง
 
 Compose เปิดพอร์ต MySQL/Redis สำหรับพัฒนาในเครื่อง ยังไม่ใช่ configuration สำหรับ deploy production
 
@@ -175,6 +197,31 @@ import type { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
 
 JWT มี `sub` (รหัสผู้ใช้), `role`, `jti` (รหัส Token), `iat`, `exp` และใช้ HS256 ชื่อ role ใช้ตัวพิมพ์ใหญ่ `USER`/`ADMIN` เสมอ Register สร้างได้เฉพาะ USER บัญชี ADMIN ใน E2E test เป็นข้อมูลจำลองเฉพาะเทสต์ ไม่ใช่บัญชีที่ใช้กับแอปที่กำลังรัน
 
+## Bookings และ Notifications ที่เชื่อมกับ Auth แล้ว
+
+ทุกเส้นทางด้านล่างต้องส่ง `Authorization: Bearer <accessToken>`:
+
+| Method | Path ใต้ /api/v1 | สิทธิ์ |
+| --- | --- | --- |
+| POST | /bookings | USER/ADMIN จองให้ตัวเอง |
+| GET | /bookings | รายการของตัวเอง รองรับ page, limit, status |
+| GET | /bookings/:bookingId | เจ้าของเท่านั้น |
+| PATCH | /bookings/:bookingId/status | เจ้าของ ส่ง status=CANCELLED เท่านั้น |
+| GET | /admin/bookings | ADMIN รองรับ page, limit, status, userId, roomId |
+| GET | /admin/bookings/:bookingId | ADMIN |
+| PATCH | /admin/bookings/:bookingId/status | ADMIN ส่ง APPROVED/PAID/CANCELLED ตามกติกา |
+| GET | /notifications | รายการของตัวเอง รองรับ page, limit |
+
+Create รับเฉพาะ roomId, checkIn, checkOut, guests ใช้วัน YYYY-MM-DD และคำนวณราคาจากห้องฝั่ง server Response วันพักเป็น YYYY-MM-DD เงินเป็น decimal string 2 ตำแหน่ง และ Create ส่ง Location header
+
+`src/bookings/booking-rules.ts` เป็นจุดร่วมสำหรับวันที่ Bangkok, สถานะที่กันห้อง และ overlap predicate ให้ Search ของคนที่ 2 import `blockingOverlap()` ไปใช้เพื่อให้ใช้กติกาเดียวกับ Booking ช่วงพักไม่รวมวันออก จึงเข้าวันเดียวกับวันออกของคนก่อนได้
+
+ทุกการสร้าง/เปลี่ยนสถานะ Booking ล็อก Room แถวเดียวกันภายใน transaction ก่อนตรวจข้อมูลล่าสุด ใช้ Read Committed เพื่อให้การอ่านหลังได้ lock เห็นสถานะล่าสุด การแก้/ปิด/ลบห้องใน Sprint 2 ต้องใช้ Room lock เดียวกันด้วย จึงจะป้องกันการแก้ข้อมูลห้องชนกับการจองครบทั้งระบบ
+
+Notification เก็บ bookingId อย่างเดียว แล้วอ่าน userId ผ่าน Booking ตอนคืน API สร้างเฉพาะ BOOKING_CREATED/BOOKING_CANCELLED ใน transaction เดียวกับ Booking การส่งสถานะเดิมซ้ำไม่สร้าง event ซ้ำ การอนุมัติ/จ่ายเงินไม่สร้าง Notification เพิ่ม
+
+Schema จาก migration เดิมมี nights/currency ใน Booking และ isRead ใน Notification อยู่แล้ว เก็บไว้เพื่อให้ใช้กับ migration ที่ merge แล้วได้ แต่ไม่เพิ่ม mark-as-read API และไม่คืน isRead ใน response ไม่ต้อง reset ฐานข้อมูลหรือแก้ migration เก่า
+
 ## Error และ Validation กลาง
 
 AppModule ลงทะเบียน Validation Pipe และ Error Filter แบบ global แล้ว โมดูลอื่นไม่ต้องลงทะเบียนซ้ำ DTO ต้องใส่ decorator ของ class-validator เพื่อให้ตรวจข้อมูลได้ ฟิลด์ที่ไม่ได้ประกาศจะถูกปฏิเสธ
@@ -221,7 +268,9 @@ npm test -- --runInBand
 npm run test:e2e -- --runInBand
 ```
 
-E2E ครอบคลุมข้อมูลคงอยู่หลังสร้างแอปใหม่, สมัครพร้อมกันและ unique constraint, Register/Login/Profile, Token ผิด/ไม่มี, ADMIN ได้ 200/USER ได้ 403, Request ID, Validation, อีเมลซ้ำ, Login ผิด และการปิดบัง Error ภายใน Route `test-admin` มีเฉพาะแอปในเทสต์ ไม่ใช่ API จริง
+Unit tests ครอบคลุมวันที่ไม่จริง/อดีต/คืนศูนย์, วันเปลี่ยนตาม Bangkok และกติกาเปลี่ยนสถานะ
+
+E2E ครอบคลุมจองพร้อมกัน, วันพักติดกัน, ราคาจองเดิมไม่เปลี่ยน, ownership, Admin status, ยกเลิกพร้อมกันไม่แจ้งซ้ำ, Notification userId/pagination และข้อมูลคงอยู่หลังสร้างแอปใหม่, สมัครพร้อมกันและ unique constraint, Register/Login/Profile, Token ผิด/ไม่มี, ADMIN ได้ 200/USER ได้ 403, Request ID, Validation, อีเมลซ้ำ, Login ผิด และการปิดบัง Error ภายใน Route `test-admin` มีเฉพาะแอปในเทสต์ ไม่ใช่ API จริง
 
 ## ทำงานร่วมกัน
 
