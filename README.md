@@ -280,6 +280,17 @@ E2E ครอบคลุมจองพร้อมกัน, วันพั�
 
 ก่อนแก้ไฟล์กลาง เช่น app.module.ts, package.json, package-lock.json, ORM schema และ Migration ให้แจ้งทีม คนที่ 2 ประสานการรวม schema/migration UsersRepository ใช้ Prisma แล้ว เมธอดค้นหาคืน Promise<User | null> และ create คืน Promise<User> ผู้เรียกต้อง await เมื่อจะใช้ผลลัพธ์
 
-Commit package-lock.json เสมอ ผู้รับโค้ดใช้ npm ci รวมงานผ่าน Pull Request และให้เพื่อนตรวจอย่างน้อยหนึ่งคนก่อนเข้า main ไม่ส่ง .env, node_modules หรือ dist ขึ้น Git
+### กติกาส่งงานเข้า main
+
+- ทุกคนทำงานใน branch ของตัวเอง แล้ว push ขึ้น branch นั้น
+- การนำงานเข้า `main` ต้องเปิด Pull Request เท่านั้น โดยตั้ง `base: main` และ `compare: branch ของตัวเอง`
+- ห้าม push โค้ดตรงเข้า `main` และห้ามกด Merge Pull Request เอง
+- **คนที่ 1 (Shogun) เป็นผู้ตรวจและ merge เข้า `main` เพียงคนเดียว** เมื่อเปิด PR แล้วให้แจ้งคนที่ 1 เพื่อตรวจและรวมงาน
+- ใน PR ให้ระบุสิ่งที่เปลี่ยน วิธีทดสอบ ผลทดสอบ และแจ้งหากแก้ไฟล์กลางหรือ API contract
+- หาก PR มี conflict ให้แก้บน branch ของตัวเองแล้ว push อัปเดต PR เดิม โดยประสานคนที่ 1 เมื่อเกี่ยวข้องกับไฟล์กลาง
+
+Commit package-lock.json เสมอ ผู้รับโค้ดใช้ npm ci ไม่ส่ง .env, node_modules หรือ dist ขึ้น Git
+
+กติกานี้เป็นข้อตกลงของทีมใน README การบังคับสิทธิ์ผ่าน GitHub branch protection/ruleset ยังต้องตั้งค่าแยกต่างหาก
 
 เอกสารอ้างอิงใน repo: Project_Description.pdf, Hotel_Booking_API_Agreement.pdf และ Hotel_Booking_Database_Simple.pdf โครงปัจจุบันเป็นฐานพัฒนา ยังไม่ใช่ระบบที่ทำครบทุกข้อในเอกสาร
