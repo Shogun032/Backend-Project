@@ -1,15 +1,14 @@
+
 import { Injectable } from '@nestjs/common';
 import { ApiException } from '../common/exceptions/api.exception';
-
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
-
 import { randomUUID } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { UsersService } from '../users/users.service';
-import { User } from '../users/types/user';
 import { RegisterDto } from './dto/register.dto';
+import { User } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -19,7 +18,9 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
+
   async register(dto: RegisterDto): Promise<Omit<User, 'passwordHash'>> {
+
     const existingUser = await this.usersService.findByEmail(dto.email);
 
     if (existingUser) {
