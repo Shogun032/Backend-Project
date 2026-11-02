@@ -1,3 +1,4 @@
+import { PrismaModule } from './prisma/prisma.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ApiExceptionFilter } from './common/filters/api-exception.filter';
@@ -17,6 +18,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    PrismaModule,
     UsersModule,
     AuthModule,
     RoomsModule,
