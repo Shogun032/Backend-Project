@@ -28,6 +28,4 @@ export class AuthController {
       message: 'Login successful',
     };
   }
-
-
 }

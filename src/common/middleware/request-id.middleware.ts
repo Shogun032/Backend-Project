@@ -5,11 +5,7 @@ import type { RequestWithId } from '../types/request-with-id';
 
 @Injectable()
 export class RequestIdMiddleware implements NestMiddleware {
-  use(
-    request: RequestWithId,
-    response: Response,
-    next: NextFunction,
-  ) {
+  use(request: RequestWithId, response: Response, next: NextFunction) {
     const requestId = randomUUID();
 
     request.requestId = requestId;
