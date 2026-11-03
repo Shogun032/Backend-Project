@@ -1,50 +1,52 @@
 import { Transform, Type } from 'class-transformer';
-import { IsArray,IsBoolean,IsInt,IsOptional,IsString,IsUrl,Length,Matches,MaxLength,Min,ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsString,
+  Length,
+  Matches,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import {
+  OptionalField,
+  PRICE_MESSAGE,
+  PRICE_PATTERN,
+  RoomImageDto,
+  trimString,
+} from './create-room.dto';
 
-export class RoomImageDto {
-  @IsUrl({ protocols: ['https'], require_protocol: true })
-  url!: string;
-
-  @IsString()
-  @MaxLength(200)
-  altText!: string;
-
-  @IsInt()
-  @Min(0)
-  sortOrder!: number;
-}
-
+// PATCH: ทุกฟิลด์ไม่บังคับ แต่ต้องมีอย่างน้อยหนึ่งฟิลด์ (ตรวจใน RoomsService.update)
 export class UpdateRoomDto {
-  @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @OptionalField()
+  @Transform(trimString)
   @IsString()
   @Length(1, 100)
   name?: string;
 
-  @IsOptional()
+  @OptionalField()
   @IsString()
   @MaxLength(2000)
   description?: string;
 
-  @IsOptional()
+  @OptionalField()
   @IsInt()
   @Min(1)
   capacity?: number;
 
-  // decimal string เช่น "1500.00" ต้องมากกว่า 0 และไม่เกิน 9,999,999.99
-  @IsOptional()
+  @OptionalField()
   @IsString()
-  @Matches(/^(?!0+(\.0{1,2})?$)\d{1,7}(\.\d{1,2})?$/, {
-    message:
-      'pricePerNight must be a decimal string greater than 0, e.g. "1500.00"',
-  })
+  @Matches(PRICE_PATTERN, { message: PRICE_MESSAGE })
   pricePerNight?: string;
 
-  @IsOptional()
+  @OptionalField()
   @IsBoolean()
   isActive?: boolean;
 
-  @IsOptional()
+  // ส่ง images มา = แทนที่รูปทั้งหมดของห้อง
+  @OptionalField()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => RoomImageDto)
