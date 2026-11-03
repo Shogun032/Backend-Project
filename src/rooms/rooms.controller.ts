@@ -1,24 +1,11 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-  Query,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
+import { Body,Controller,Delete,Get,HttpCode,HttpStatus,Param,ParseUUIDPipe,Patch,Post,Query,Res,UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
+import { SearchRoomsDto } from './dto/search-rooms.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { RoomsService } from './rooms.service';
 
@@ -33,7 +20,13 @@ export class RoomsController {
     return { data, message: 'Rooms retrieved', meta };
   }
 
-  // TODO Sprint 2: GET /rooms/search ต้องประกาศตรงนี้ ก่อน @Get(':roomId')
+  // GET /rooms/search — ทุกคน ต้องประกาศก่อน @Get(':roomId')
+  // ไม่อย่างนั้นคำว่า "search" จะถูกจับเป็น roomId
+  @Get('search')
+  async search(@Query() query: SearchRoomsDto) {
+    const { data, meta } = await this.roomsService.search(query);
+    return { data, message: 'Available rooms retrieved', meta };
+  }
 
   // GET /rooms/:roomId — ทุกคน ห้อง Inactive คืน 404
   @Get(':roomId')
@@ -42,7 +35,6 @@ export class RoomsController {
     return { data, message: 'Room retrieved' };
   }
 
-  // POST /rooms — ADMIN
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
@@ -51,12 +43,10 @@ export class RoomsController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const data = await this.roomsService.create(dto);
-    // Location ชี้ไป Admin detail เพราะห้องที่สร้างอาจเป็น Inactive
     res.location(`/api/v1/admin/rooms/${data.id}`);
     return { data, message: 'Room created' };
   }
 
-  // PATCH /rooms/:roomId — ADMIN
   @Patch(':roomId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
@@ -68,7 +58,6 @@ export class RoomsController {
     return { data, message: 'Room updated' };
   }
 
-  // DELETE /rooms/:roomId — ADMIN
   @Delete(':roomId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')

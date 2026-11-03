@@ -1,28 +1,17 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { BookingStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { BLOCKING_STATUSES,bangkokToday,blockingOverlap,parseBookingDates } from '../bookings/booking-rules';
 import { PaginationDto, paginationMeta } from '../common/dto/pagination.dto';
 import { ApiException } from '../common/exceptions/api.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminListRoomsDto } from './dto/admin-list-rooms.dto';
 import { CreateRoomDto, RoomImageDto } from './dto/create-room.dto';
+import { SearchRoomsDto } from './dto/search-rooms.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { ROOM_INCLUDE, toRoomResponse } from './room.mapper';
 
-// สถานะที่กันห้อง ตามข้อตกลง API หัวข้อ 6
-// ถ้า booking-rules.ts export ค่านี้ไว้แล้ว ให้ import มาใช้แทน
-const ROOM_BLOCKING_STATUSES: BookingStatus[] = [
-  BookingStatus.PENDING,
-  BookingStatus.APPROVED,
-  BookingStatus.PAID,
-];
-
-// วันนี้ตามเวลา Asia/Bangkok ในรูป Date เที่ยงคืน UTC เพื่อเทียบกับคอลัมน์ DATE
-// ถ้า booking-rules.ts มีฟังก์ชันแบบนี้อยู่แล้ว ให้ import มาใช้แทน
-function todayInBangkok(): Date {
-  const ymd = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Bangkok',
-  }).format(new Date()); // "YYYY-MM-DD"
-  return new Date(`${ymd}T00:00:00.000Z`);
+function startOfBangkokToday(): Date {
+  return new Date(`${bangkokToday()}T00:00:00.000Z`);
 }
 
 function toImageData(image: RoomImageDto) {
@@ -45,10 +34,24 @@ function roomNotFound(): ApiException {
 export class RoomsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // ---------- Public ----------
 
   findAll(query: PaginationDto) {
     return this.list({ isActive: true }, query);
+  }
+
+  search(query: SearchRoomsDto) {
+    const { checkIn, checkOut } = parseBookingDates(
+      query.checkIn,
+      query.checkOut,
+    );
+    return this.list(
+      {
+        isActive: true,
+        capacity: { gte: query.guests },
+        bookings: { none: blockingOverlap(checkIn, checkOut) },
+      },
+      query,
+    );
   }
 
   async findOne(roomId: string) {
@@ -59,8 +62,6 @@ export class RoomsService {
     if (!room) throw roomNotFound();
     return toRoomResponse(room);
   }
-
-  // ---------- Admin ----------
 
   findAllForAdmin(query: AdminListRoomsDto) {
     const where: Prisma.RoomWhereInput =
@@ -108,8 +109,8 @@ export class RoomsService {
         const conflict = await tx.booking.findFirst({
           where: {
             roomId,
-            status: { in: ROOM_BLOCKING_STATUSES },
-            checkOut: { gt: todayInBangkok() },
+            status: { in: BLOCKING_STATUSES },
+            checkOut: { gt: startOfBangkokToday() },
             guests: { gt: dto.capacity },
           },
           select: { id: true },
@@ -125,7 +126,6 @@ export class RoomsService {
 
       const { images, ...roomData } = dto;
 
-      // PATCH images = แทนที่ทั้ง Array
       if (images !== undefined) {
         await tx.roomImage.deleteMany({ where: { roomId } });
         if (images.length > 0) {
@@ -166,14 +166,10 @@ export class RoomsService {
     });
   }
 
-  // ---------- Internal ----------
-
-  // ล็อกแถวห้องแบบเดียวกับ bookings.service.ts ต้องเรียกเป็นอย่างแรกใน transaction
   private lockRoom(tx: Prisma.TransactionClient, roomId: string) {
     return tx.$queryRaw`SELECT id FROM rooms WHERE id = ${roomId} FOR UPDATE`;
   }
 
-  // เรียง createdAt DESC, id DESC และแบ่งหน้าตามข้อตกลงกลาง
   private async list(
     where: Prisma.RoomWhereInput,
     { page, limit }: PaginationDto,
