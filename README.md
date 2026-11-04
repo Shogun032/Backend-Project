@@ -14,7 +14,7 @@
 
 รวมฐานงานคนที่ 3 แล้ว: ตาราง Booking/Notification พร้อม migration, API สร้าง/ดู/ยกเลิก Booking, Admin เปลี่ยนสถานะ และรายการ Notification
 
-ยังต้องทำ: แก้โปรไฟล์, Logout/เพิกถอน Token ผ่าน Redis, rate limiting, Health check, Rooms CRUD/Search และ Swagger รายละเอียดของแต่ละ endpoint ตอนนี้ Guard ยังไม่ตรวจ Token ที่ถูกเพิกถอน และไม่มีบัญชี ADMIN จากการสมัครทั่วไป
+ยังต้องทำ: แก้โปรไฟล์, Logout/เพิกถอน Token ผ่าน Redis, rate limiting, Health check และ Swagger รายละเอียดของแต่ละ endpoint ตอนนี้ Guard ยังไม่ตรวจ Token ที่ถูกเพิกถอน และไม่มีบัญชี ADMIN จากการสมัครทั่วไป
 
 ## ส่งต่องาน Sprint 1 และเริ่ม Sprint 2
 
@@ -112,7 +112,7 @@ npx prisma migrate deploy
 npx prisma db seed
 ```
 
-**Seed ปัจจุบันล้าง RoomImage และ Room ทั้งหมดก่อนสร้างห้องตัวอย่าง 5 ห้อง** อย่ารันกับฐานข้อมูลที่มีข้อมูลต้องเก็บ รูปใน seed เป็น URL ตัวอย่าง Schema มี User/Room/RoomImage และผู้ใช้จาก Register บันทึกลง MySQL แล้ว RoomsController มีรายการห้อง Active เบื้องต้น แต่ยังไม่ครบ CRUD/Search และ pagination ตามข้อตกลง
+**Seed ปัจจุบันล้าง Notification, Booking, RoomImage และ Room ทั้งหมดก่อนสร้างห้องตัวอย่าง 5 ห้อง** อย่ารันกับฐานข้อมูลที่มีข้อมูลต้องเก็บ รูปใน seed เป็น URL ตัวอย่าง รายละเอียด Rooms API ดูหัวข้อ Rooms API (คนที่ 2) ด้านล่าง
 
 Compose เปิดพอร์ต MySQL/Redis สำหรับพัฒนาในเครื่อง ยังไม่ใช่ configuration สำหรับ deploy production
 
@@ -294,3 +294,99 @@ Commit package-lock.json เสมอ ผู้รับโค้ดใช้ np
 กติกานี้เป็นข้อตกลงของทีมใน README การบังคับสิทธิ์ผ่าน GitHub branch protection/ruleset ยังต้องตั้งค่าแยกต่างหาก
 
 เอกสารอ้างอิงใน repo: Project_Description.pdf, Hotel_Booking_API_Agreement.pdf และ Hotel_Booking_Database_Simple.pdf โครงปัจจุบันเป็นฐานพัฒนา ยังไม่ใช่ระบบที่ทำครบทุกข้อในเอกสาร
+
+## Rooms API (คนที่ 2)
+
+### เตรียมข้อมูลห้องสำหรับพัฒนา
+
+```bash
+npx prisma migrate deploy
+npx prisma db seed   # สร้างห้องตัวอย่าง 5 ห้อง (เปิด 4 ห้อง ปิด 1 ห้อง)
+npm run start:dev
+```
+
+Seed จะลบ Notification, Booking, RoomImage และ Room เดิมก่อนสร้างใหม่ ใช้กับฐานข้อมูลพัฒนาเท่านั้น
+
+### Endpoint
+
+| Method | Path | สิทธิ์ | หมายเหตุ |
+| --- | --- | --- | --- |
+| GET | `/api/v1/rooms` | ทุกคน | เฉพาะห้อง Active; `page`, `limit` |
+| GET | `/api/v1/rooms/search` | ทุกคน | ต้องมี `checkIn`, `checkOut`, `guests` |
+| GET | `/api/v1/rooms/{roomId}` | ทุกคน | ห้อง Inactive คืน 404 |
+| GET | `/api/v1/admin/rooms` | ADMIN | รวม Active/Inactive; กรอง `isActive=true\|false` ได้ |
+| GET | `/api/v1/admin/rooms/{roomId}` | ADMIN | ห้องทุกสถานะ |
+| POST | `/api/v1/rooms` | ADMIN | 201 พร้อม `Location` ไปที่ admin detail |
+| PATCH | `/api/v1/rooms/{roomId}` | ADMIN | ต้องมีอย่างน้อยหนึ่งฟิลด์; ส่ง `images` = แทนที่รูปทั้งหมด |
+| DELETE | `/api/v1/rooms/{roomId}` | ADMIN | 204; ห้องที่มีประวัติการจองลบไม่ได้ ให้ PATCH `isActive=false` แทน |
+
+### กติกาที่ใช้
+
+- `pricePerNight` รับและคืนเป็น decimal string เช่น `"1500.00"` มากกว่า 0 และไม่เกิน `9999999.99`; response มี `currency: "THB"`
+- รูปเรียงตาม `sortOrder` และต้องเป็น URL แบบ HTTPS
+- Search ใช้ `parseBookingDates` และ `blockingOverlap` จาก `src/bookings/booking-rules.ts` ตัวเดียวกับการสร้างการจอง ช่วงพักคือ `[checkIn, checkOut)` และ PENDING/APPROVED/PAID กันห้อง ผลค้นหาเป็นข้อมูล ณ เวลาค้น การจองจริงยังตรวจซ้ำใน transaction
+- PATCH และ DELETE ห้องล็อกแถว Room (`SELECT ... FOR UPDATE`) ก่อนอ่านข้อมูล แบบเดียวกับ BookingsService
+
+### ตัวอย่างการเรียก
+
+```bash
+# ดูห้องที่เปิดรับจอง
+curl "http://localhost:3000/api/v1/rooms?page=1&limit=20"
+
+# ค้นห้องว่าง
+curl "http://localhost:3000/api/v1/rooms/search?checkIn=2026-11-10&checkOut=2026-11-12&guests=2"
+
+# ADMIN สร้างห้อง
+curl -X POST http://localhost:3000/api/v1/rooms \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Deluxe Double","capacity":2,"pricePerNight":"1800.00","images":[{"url":"https://example.com/rooms/double-1.jpg","altText":"Queen bed","sortOrder":0}]}'
+
+# ADMIN ปิดห้อง (หยุดรับจองใหม่ การจองเดิมยังอยู่)
+curl -X PATCH http://localhost:3000/api/v1/rooms/<roomId> \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"isActive":false}'
+
+# ADMIN ลบห้องที่ไม่มีประวัติการจอง
+curl -X DELETE http://localhost:3000/api/v1/rooms/<roomId> \
+  -H "Authorization: Bearer <ADMIN_TOKEN>"
+```
+
+ตัวอย่าง response ของห้อง
+
+```json
+{
+  "data": {
+    "id": "<room-uuid>",
+    "name": "Deluxe Double",
+    "description": "",
+    "capacity": 2,
+    "pricePerNight": "1800.00",
+    "currency": "THB",
+    "isActive": true,
+    "images": [
+      { "url": "https://example.com/rooms/double-1.jpg", "altText": "Queen bed", "sortOrder": 0 }
+    ],
+    "createdAt": "2026-11-03T17:59:24.419Z",
+    "updatedAt": "2026-11-03T17:59:24.419Z"
+  },
+  "message": "Room created"
+}
+```
+
+### Error ที่ Rooms ใช้
+
+| HTTP | `error.code` | เมื่อ |
+| --- | --- | --- |
+| 400 | `VALIDATION_ERROR` | ข้อมูลผิด, UUID ผิด, PATCH ว่าง, วันที่ค้นหาไม่ถูกต้อง |
+| 401 / 403 | `UNAUTHORIZED` / `FORBIDDEN` | ไม่มี token หรือไม่ใช่ ADMIN |
+| 404 | `RESOURCE_NOT_FOUND` | ไม่พบห้อง หรือห้อง Inactive ใน public route |
+| 409 | `ROOM_HAS_BOOKINGS` | ลบห้องที่มีประวัติการจอง |
+| 409 | `ROOM_CAPACITY_CONFLICT` | ลด capacity ต่ำกว่า guests ของการจองที่ยังกันห้องและยังไม่สิ้นสุด |
+
+### Test
+
+```bash
+npm test -- rooms
+```

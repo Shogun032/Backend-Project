@@ -3,8 +3,8 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  await prisma.roomImage.deleteMany();
-  await prisma.room.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.booking.deleteMany();
 
   const rooms = [
     {
