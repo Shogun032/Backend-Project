@@ -3,7 +3,6 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { CreateRoomDto } from './create-room.dto';
 import { UpdateRoomDto } from './update-room.dto';
-import 'reflect-metadata';
 
 async function invalidFields(
   cls: new () => object,
