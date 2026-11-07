@@ -8,6 +8,7 @@ import * as argon2 from 'argon2';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { User } from '@prisma/client';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class AuthService {
@@ -15,6 +16,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
   ) {}
 
   async register(dto: RegisterDto): Promise<Omit<User, 'passwordHash'>> {
@@ -97,5 +99,9 @@ export class AuthService {
         updatedAt: user.updatedAt,
       },
     };
+  }
+
+  async logout(jti: string, expiresAt: number): Promise<void> {
+    await this.redisService.revokeToken(jti, expiresAt);
   }
 }

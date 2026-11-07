@@ -82,10 +82,17 @@ describe('Auth flow (e2e)', () => {
       email: testEmail('auth-flow'),
       password: 'TestPassword123!',
     };
-    await request(app.getHttpServer())
+    const registered = await request(app.getHttpServer())
       .post('/api/v1/auth/register')
       .send({ name: 'Auth Test', ...credentials })
       .expect(201);
+    expect(registered.headers.location).toBe('/api/v1/users/me');
+    const registration = responseBody<ProfileResponse>(registered);
+    expect(registration.data.email).toBe(credentials.email);
+    expect(registration.data.role).toBe('USER');
+    expect(registration.data).not.toHaveProperty('passwordHash');
+    expect(registration.data).not.toHaveProperty('password');
+    expect(registration).not.toHaveProperty('user');
 
     const login = await request(app.getHttpServer())
       .post('/api/v1/auth/login')

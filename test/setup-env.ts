@@ -19,5 +19,15 @@ if (
 }
 
 process.env.DATABASE_URL = testDatabaseUrl;
+const testRedisUrl = process.env.TEST_REDIS_URL;
+if (
+  !testRedisUrl ||
+  !['redis:', 'rediss:'].includes(new URL(testRedisUrl).protocol)
+) {
+  throw new Error(
+    'Set TEST_REDIS_URL to a dedicated Redis instance for E2E tests',
+  );
+}
+process.env.REDIS_URL = testRedisUrl;
 process.env.JWT_SECRET = randomBytes(32).toString('hex');
 process.env.JWT_EXPIRES_IN = '900';

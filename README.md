@@ -4,7 +4,7 @@
 
 ## สถานะปัจจุบัน
 
-ทำแล้ว: Register, Login ด้วย JWT, ดูข้อมูลตัวเอง, JWT/Role Guards, Validation, Error Filter กลาง และ Request ID
+ทำแล้ว: Register, Login/JWT, ดู/แก้โปรไฟล์, Logout ผ่าน Redis, คำสั่งสร้าง Admin, JWT/Role Guards, Validation, Error Filter และ Request ID พร้อม Swagger ของ Users/Auth
 
 ข้อมูลผู้ใช้บันทึกใน MySQL ผ่าน UsersRepository → PrismaService แล้ว ไม่หายเมื่อแอปรีสตาร์ต PrismaModule เปิดให้โมดูลอื่นใช้ตัวเชื่อมร่วมกัน และปิดการเชื่อมต่อเมื่อแอปถูกปิดผ่าน Nest lifecycle
 
@@ -14,7 +14,9 @@
 
 รวมฐานงานคนที่ 3 แล้ว: ตาราง Booking/Notification พร้อม migration, API สร้าง/ดู/ยกเลิก Booking, Admin เปลี่ยนสถานะ และรายการ Notification
 
-ยังต้องทำ: แก้โปรไฟล์, Logout/เพิกถอน Token ผ่าน Redis, rate limiting, Health check, Rooms CRUD/Search และ Swagger รายละเอียดของแต่ละ endpoint ตอนนี้ Guard ยังไม่ตรวจ Token ที่ถูกเพิกถอน และไม่มีบัญชี ADMIN จากการสมัครทั่วไป
+Users/Auth Sprint 2 เพิ่ม PATCH /users/me สำหรับแก้ชื่อ/อีเมล และ POST /auth/logout แล้ว Logout ใช้ JWT Guard และคืน 204 โดยไม่มี body เก็บ jti ใน Redis จนถึง exp ของ JWT Guard ตรวจ Redis ทุก protected request: Token ถูกเพิกถอนคืน 401 และ Redis ตรวจสอบ/บันทึกไม่ได้คืน 503 Logout มีผลเฉพาะ Token ที่ส่งมา ไม่ยกเลิก session อื่น
+
+งานรวมระบบที่ยังค้าง: rate limiting, Health check, Rooms CRUD/Search และเอกสาร Swagger ของโมดูลอื่นให้ครบ ไม่มีบัญชี ADMIN จากการสมัครทั่วไป ให้ใช้คำสั่งเฉพาะด้านล่าง
 
 ## ส่งต่องาน Sprint 1 และเริ่ม Sprint 2
 
@@ -65,9 +67,9 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `JWT_SECRET` | Secret สำหรับลงลายเซ็นและตรวจ JWT |
 | `JWT_EXPIRES_IN` | อายุ Token หน่วยวินาที ค่าในตัวอย่าง 900 |
 | `TZ` | เขตเวลาเครื่องพัฒนา ในตัวอย่างใช้ Asia/Bangkok |
-| `DATABASE_URL`, `REDIS_URL` | DATABASE_URL ใช้กับ Prisma และ Auth; REDIS_URL เตรียมไว้ ยังไม่เชื่อมกับ Auth |
+| `DATABASE_URL`, `REDIS_URL` | DATABASE_URL ใช้กับ Prisma; REDIS_URL ใช้ตรวจและบันทึกการเพิกถอน JWT |
 
-ต้องเปิด MySQL และรัน migration ตามหัวข้อ Database/Redis ด้านล่างก่อนเริ่มแอป Redis ยังไม่เชื่อมกับ Auth
+ต้องเปิด MySQL และรัน migration ตามหัวข้อ Database/Redis ด้านล่างก่อนเริ่มแอป Protected API และ Logout ต้องใช้ Redis ด้วย
 
 หลัง npm ci ให้สร้าง Prisma Client ตาม schema ล่าสุดด้วย `npx prisma generate`
 
@@ -80,7 +82,7 @@ npm run start:dev
 - Swagger: `http://localhost:3000/docs`
 - OpenAPI JSON: `http://localhost:3000/docs-json`
 
-Swagger เปิดใช้งานแล้ว แต่รายละเอียด DTO/Response และ Authentication ของแต่ละ route ยังต้องเพิ่มให้ครบ ถ้าเจอ `EADDRINUSE` ให้หยุดเซิร์ฟเวอร์เดิมด้วย Ctrl+C และเปิดเพียงหนึ่งตัว
+Swagger ของ Users/Auth มี Request/Response schemas, error examples, กลุ่ม Auth/Users และ Bearer authentication แล้ว เอกสารของโมดูลอื่นยังต้องเติมต่อ ถ้าเจอ `EADDRINUSE` ให้หยุดเซิร์ฟเวอร์เดิมด้วย Ctrl+C และเปิดเพียงหนึ่งตัว
 
 ## Database/Redis จาก branch คนที่ 2
 
@@ -112,7 +114,7 @@ npx prisma migrate deploy
 npx prisma db seed
 ```
 
-**Seed ปัจจุบันล้าง RoomImage และ Room ทั้งหมดก่อนสร้างห้องตัวอย่าง 5 ห้อง** อย่ารันกับฐานข้อมูลที่มีข้อมูลต้องเก็บ รูปใน seed เป็น URL ตัวอย่าง Schema มี User/Room/RoomImage และผู้ใช้จาก Register บันทึกลง MySQL แล้ว RoomsController มีรายการห้อง Active เบื้องต้น แต่ยังไม่ครบ CRUD/Search และ pagination ตามข้อตกลง
+**Seed ปัจจุบันล้าง RoomImage และ Room ทั้งหมดก่อนสร้างห้องตัวอย่าง 5 ห้อง** อย่ารันกับฐานข้อมูลที่มีข้อมูลต้องเก็บ รูปใน seed เป็น URL ตัวอย่าง Schema มี User/Room/RoomImage/Booking/Notification และผู้ใช้จาก Register บันทึกลง MySQL แล้ว RoomsController มีรายการห้อง Active เบื้องต้น แต่ยังไม่ครบ CRUD/Search และ pagination ตามข้อตกลง
 
 Compose เปิดพอร์ต MySQL/Redis สำหรับพัฒนาในเครื่อง ยังไม่ใช่ configuration สำหรับ deploy production
 
@@ -139,7 +141,41 @@ curl -i http://localhost:3000/api/v1/users/me \
 
 Token ถูกต้องได้ 200 ไม่มี/ผิด/หมดอายุได้ 401 Login ผิดได้ 401 อีเมลสมัครซ้ำได้ 409 ข้อมูลไม่ผ่าน Validation ได้ 400 ไม่คืน password หรือ passwordHash
 
-ข้อที่ยังต่างจาก API Agreement: Register ปัจจุบันคืน `{ user, message }` ต้องปรับเป็น `{ data, message }` และเพิ่ม Location header สำหรับ Create ให้ครบก่อนส่ง API ฉบับสมบูรณ์
+Register สำเร็จคืน HTTP 201 พร้อม `{ data: User, message }` และ Header `Location: /api/v1/users/me` ผู้ใช้ต้อง Login ก่อนอ่านโปรไฟล์
+
+แก้โปรไฟล์และ Logout ด้วย Token ที่ได้จาก Login:
+
+```bash
+curl -i -X PATCH http://localhost:3000/api/v1/users/me \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_TOKEN' \
+  -d '{"name":"Mint Updated"}'
+
+curl -i -X POST http://localhost:3000/api/v1/auth/logout \
+  -H 'Authorization: Bearer YOUR_TOKEN'
+```
+
+PATCH รับเฉพาะ name/email อย่างน้อยหนึ่งฟิลด์ ปฏิเสธ null, role และ password อีเมลถูกตัดช่องว่าง/เปลี่ยนเป็นตัวพิมพ์เล็ก ถ้าซ้ำบัญชีอื่นได้ 409 Logout สำเร็จได้ 204 ไม่มี body Token เดิมใช้ต่อไม่ได้ (401) ให้ Login เพื่อรับ Token ใหม่
+
+## สร้างบัญชี Admin สำหรับพัฒนา
+
+เปิด MySQL และรัน migrations ก่อน แล้วตั้งค่าใน `.env` ของเครื่องตัวเอง (มีชื่อค่าตัวอย่างใน `.env.example`):
+
+```dotenv
+ADMIN_NAME="Development Admin"
+ADMIN_EMAIL="admin@example.com"
+ADMIN_PASSWORD="ใส่รหัสผ่านสำหรับพัฒนาที่ตั้งเอง"
+```
+
+ใช้รหัสผ่าน 8–128 ตัวอักษร ไม่ commit `.env` หรือรหัสผ่านจริง จากนั้นรัน:
+
+```bash
+npm run admin:create
+```
+
+คำสั่งโหลด `.env`, ตรวจข้อมูล, hash ด้วย Argon2 แล้วสร้าง role ADMIN ใน MySQL ถ้ามีอีเมลนี้อยู่แล้วจะหยุดด้วย exit code 1 ไม่เขียนทับรหัสผ่านและไม่เปลี่ยน USER เดิมเป็น ADMIN ห้ามเปลี่ยน Register ให้รับ role จาก client
+
+Login ผ่าน `/api/v1/auth/login` ด้วยข้อมูล Admin ที่ตั้งไว้ แล้วใช้ Token เรียก `/api/v1/admin/bookings` ควรได้ 200 ส่วน Token ของ USER ได้ 403 อย่าใส่รหัสผ่านจริงในตัวอย่างเอกสารหรือภาพส่งงาน
 
 ## ให้โมดูลของเพื่อนใช้ Guard
 
@@ -195,7 +231,7 @@ import type { AuthenticatedRequest } from '../auth/guards/jwt-auth.guard';
 
 ใช้ `request.user.id` เป็นเจ้าของ Booking ห้ามเชื่อถือ userId/role ที่ client ส่งมา การตรวจว่าเป็นเจ้าของ resource ต้องทำเพิ่มในโมดูลนั้นเอง Guard ตรวจ Token/Role ไม่ได้ตรวจ Ownership ให้
 
-JWT มี `sub` (รหัสผู้ใช้), `role`, `jti` (รหัส Token), `iat`, `exp` และใช้ HS256 ชื่อ role ใช้ตัวพิมพ์ใหญ่ `USER`/`ADMIN` เสมอ Register สร้างได้เฉพาะ USER บัญชี ADMIN ใน E2E test เป็นข้อมูลจำลองเฉพาะเทสต์ ไม่ใช่บัญชีที่ใช้กับแอปที่กำลังรัน
+JWT มี `sub` (รหัสผู้ใช้), `role`, `jti` (รหัส Token), `iat`, `exp` และใช้ HS256 ชื่อ role ใช้ตัวพิมพ์ใหญ่ `USER`/`ADMIN` เสมอ Register สร้างได้เฉพาะ USER บัญชี ADMIN ใน E2E test เป็นข้อมูลเฉพาะเทสต์และถูกล้างหลังเสร็จ ส่วนบัญชีพัฒนาให้สร้างผ่าน npm run admin:create
 
 ## Bookings และ Notifications ที่เชื่อมกับ Auth แล้ว
 
@@ -251,16 +287,18 @@ throw new ApiException(409, 'ROOM_UNAVAILABLE', 'Room unavailable');
 
 ## ทดสอบ
 
-Unit tests ไม่ต้องใช้ฐานข้อมูล ส่วน E2E ใช้ MySQL จริงและไม่ต้องเปิดเซิร์ฟเวอร์แยก
+Unit tests ไม่ต้องใช้ฐานข้อมูล ส่วน E2E ใช้ MySQL และ Redis จริงแยกสำหรับทดสอบ ไม่ต้องเปิดเซิร์ฟเวอร์ API แยก
 
 สร้างฐานข้อมูลสำหรับทดสอบชื่อ `hotel_booking_test` แยกจากฐานข้อมูลพัฒนา แล้วกำหนด TEST_DATABASE_URL ใน Terminal (แก้ค่าตัวอย่างให้ตรงกับ MySQL ของตัวเอง):
 
 ```bash
 export TEST_DATABASE_URL='mysql://root:change_me@localhost:3306/hotel_booking_test'
+# เปลี่ยน URL ให้ตรงกับ Redis instance ที่เปิดแยกสำหรับเทสต์
+export TEST_REDIS_URL='redis://localhost:6380/0'
 DATABASE_URL="$TEST_DATABASE_URL" npx prisma migrate deploy
 ```
 
-E2E จะหยุดทันทีถ้าไม่มี TEST_DATABASE_URL หรือชื่อฐานข้อมูลไม่ลงท้าย `_test` เพื่อไม่ให้เขียนลงฐานข้อมูลพัฒนาโดยเผลอ เทสต์สร้างบัญชีชื่อเฉพาะแต่ละรอบและลบเฉพาะบัญชีที่ตัวเองสร้างเมื่อเสร็จ ถ้าเทสต์ถูกหยุดกลางทางอาจมีข้อมูลทดสอบค้างอยู่
+E2E ต้องมี TEST_REDIS_URL ที่ชี้ไปยัง Redis สำหรับเทสต์โดยเฉพาะ และจะหยุดทันทีถ้าไม่มี TEST_DATABASE_URL หรือชื่อฐานข้อมูลไม่ลงท้าย `_test` เพื่อไม่ให้เขียนลงฐานข้อมูลพัฒนาโดยเผลอ เทสต์สร้างบัญชีชื่อเฉพาะแต่ละรอบและลบเฉพาะบัญชีที่ตัวเองสร้างเมื่อเสร็จ ถ้าเทสต์ถูกหยุดกลางทางอาจมีข้อมูลทดสอบค้างอยู่
 
 ```bash
 npm run build
@@ -271,6 +309,8 @@ npm run test:e2e -- --runInBand
 Unit tests ครอบคลุมวันที่ไม่จริง/อดีต/คืนศูนย์, วันเปลี่ยนตาม Bangkok และกติกาเปลี่ยนสถานะ
 
 E2E ครอบคลุมจองพร้อมกัน, วันพักติดกัน, ราคาจองเดิมไม่เปลี่ยน, ownership, Admin status, ยกเลิกพร้อมกันไม่แจ้งซ้ำ, Notification userId/pagination และข้อมูลคงอยู่หลังสร้างแอปใหม่, สมัครพร้อมกันและ unique constraint, Register/Login/Profile, Token ผิด/ไม่มี, ADMIN ได้ 200/USER ได้ 403, Request ID, Validation, อีเมลซ้ำ, Login ผิด และการปิดบัง Error ภายใน Route `test-admin` มีเฉพาะแอปในเทสต์ ไม่ใช่ API จริง
+
+ชุดทดสอบ Users/Auth Sprint 2 ครอบคลุมแก้โปรไฟล์, email unique, สิทธิ์, Logout 204/Token เดิม 401, session อื่นยังใช้งานได้, expiry ของ key ตรงกับ JWT exp, revoked token ยังถูกปฏิเสธหลังเปิดแอปใหม่ และจำลอง Redis error ได้ 503 เพิ่ม E2E สำหรับ OpenAPI contract และคำสั่งสร้าง Admin ด้วย ผลตรวจ Users/Auth Sprint 2: Build/ESLint ผ่าน, Unit tests 14 เคส และ E2E กับ MySQL/Redis จริง 51 เคสผ่าน
 
 ## ทำงานร่วมกัน
 
