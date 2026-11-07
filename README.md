@@ -4,7 +4,7 @@
 
 ## สถานะปัจจุบัน
 
-ทำแล้ว: Register, Login/JWT, ดู/แก้โปรไฟล์, Logout ผ่าน Redis, คำสั่งสร้าง Admin, JWT/Role Guards, Validation, Error Filter และ Request ID พร้อม Swagger ของ Users/Auth
+ทำแล้ว: Register, Login/JWT, ดู/แก้โปรไฟล์, Logout ผ่าน Redis, คำสั่งสร้าง Admin, JWT/Role Guards, Validation, Error Filter และ Request ID พร้อม Swagger ของ Users/Auth/Rooms/Bookings/Notifications
 
 ข้อมูลผู้ใช้บันทึกใน MySQL ผ่าน UsersRepository → PrismaService แล้ว ไม่หายเมื่อแอปรีสตาร์ต PrismaModule เปิดให้โมดูลอื่นใช้ตัวเชื่อมร่วมกัน และปิดการเชื่อมต่อเมื่อแอปถูกปิดผ่าน Nest lifecycle
 
@@ -16,7 +16,7 @@
 
 Users/Auth Sprint 2 เพิ่ม PATCH /users/me และ POST /auth/logout แล้ว Logout คืน 204 และบันทึก jti ใน Redis จน JWT หมดอายุ Guard ตรวจการเพิกถอนทุก protected request: Token ถูกเพิกถอนคืน 401 และ Redis ใช้งานไม่ได้คืน 503
 
-Rooms Sprint 2 มี Public list/detail/search และ Admin CRUD พร้อมรูปภาพ การกรองสถานะ Pagination, Swagger และ Integration tests แล้ว งานรวมระบบที่ยังค้าง: rate limiting, Health check และเอกสารโมดูลอื่นให้ครบ ใช้คำสั่งเฉพาะด้านล่างเพื่อสร้าง Admin
+Rooms Sprint 2 มี Public list/detail/search และ Admin CRUD พร้อมรูปภาพ การกรองสถานะ Pagination, Swagger และ Integration tests แล้ว งานรวมระบบที่ยังค้าง: rate limiting และ Health check ใช้คำสั่งเฉพาะด้านล่างเพื่อสร้าง Admin
 
 
 ## ส่งต่องาน Sprint 1 และเริ่ม Sprint 2
@@ -83,7 +83,7 @@ npm run start:dev
 - Swagger: `http://localhost:3000/docs`
 - OpenAPI JSON: `http://localhost:3000/docs-json`
 
-Swagger ของ Users/Auth และ Rooms มี Request/Response schemas, error examples, กลุ่ม Auth/Users/Rooms/Admin Rooms และ Bearer authentication แล้ว เอกสารของโมดูลอื่นยังต้องเติมต่อ ถ้าเจอ `EADDRINUSE` ให้หยุดเซิร์ฟเวอร์เดิมด้วย Ctrl+C และเปิดเพียงหนึ่งตัว
+Swagger ของ Users/Auth, Rooms, Bookings และ Notifications มี Request/Response schemas, error examples และ Bearer authentication ตามสิทธิ์ของแต่ละ endpoint แล้ว ถ้าเจอ `EADDRINUSE` ให้หยุดเซิร์ฟเวอร์เดิมด้วย Ctrl+C และเปิดเพียงหนึ่งตัว
 
 ## Database/Redis จาก branch คนที่ 2
 
@@ -260,6 +260,45 @@ Notification เก็บ bookingId อย่างเดียว แล้ว�
 
 Schema จาก migration เดิมมี nights/currency ใน Booking และ isRead ใน Notification อยู่แล้ว เก็บไว้เพื่อให้ใช้กับ migration ที่ merge แล้วได้ แต่ไม่เพิ่ม mark-as-read API และไม่คืน isRead ใน response ไม่ต้อง reset ฐานข้อมูลหรือแก้ migration เก่า
 
+
+### ตัวอย่าง Booking และ Notification
+
+Login ด้วยบัญชี User และ Admin ตามหัวข้อ Auth แล้วแทน `USER_TOKEN`, `ADMIN_TOKEN`, `ROOM_ID` และ `BOOKING_ID` ด้วยค่าจริง ตัวอย่างวันที่ต้องเปลี่ยนเป็นวันอนาคตตาม Asia/Bangkok (ยกเลิกได้ก่อนวันเช็กอินเท่านั้น)
+
+```bash
+# ค้นหาห้องว่างและนำ data[].id ไปแทน ROOM_ID
+curl -i 'http://localhost:3000/api/v1/rooms/search?checkIn=2027-01-10&checkOut=2027-01-12&guests=2'
+
+# สร้างการจอง แล้วนำ data.id ไปแทน BOOKING_ID
+curl -i -X POST http://localhost:3000/api/v1/bookings \
+  -H 'Authorization: Bearer USER_TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{"roomId":"ROOM_ID","checkIn":"2027-01-10","checkOut":"2027-01-12","guests":2}'
+
+curl -i 'http://localhost:3000/api/v1/bookings?page=1&limit=20&status=PENDING' \
+  -H 'Authorization: Bearer USER_TOKEN'
+
+curl -i http://localhost:3000/api/v1/bookings/BOOKING_ID \
+  -H 'Authorization: Bearer USER_TOKEN'
+
+# เจ้าของยกเลิก PENDING/APPROVED ก่อนวันเข้า
+curl -i -X PATCH http://localhost:3000/api/v1/bookings/BOOKING_ID/status \
+  -H 'Authorization: Bearer USER_TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"CANCELLED"}'
+
+curl -i 'http://localhost:3000/api/v1/notifications?page=1&limit=20' \
+  -H 'Authorization: Bearer USER_TOKEN'
+
+# Admin จัดการรายการอื่นที่ยังไม่ยกเลิก: PENDING → APPROVED → PAID
+curl -i -X PATCH http://localhost:3000/api/v1/admin/bookings/BOOKING_ID/status \
+  -H 'Authorization: Bearer ADMIN_TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"APPROVED"}'
+```
+
+Create สำเร็จได้ 201 พร้อม Location; ดู/ยกเลิกได้ 200 การใช้ ID ของคนอื่นผ่าน Owner route ได้ 404 และการจองทับซ้อนได้ 409 ROOM_UNAVAILABLE การอนุมัติ/บันทึก PAID ใช้ได้ถึงวันเช็กอินและไม่สร้าง Notification ส่วนการยกเลิกสร้าง BOOKING_CANCELLED ให้เจ้าของเพียงครั้งเดียว
+
 ## Error และ Validation กลาง
 
 AppModule ลงทะเบียน Validation Pipe และ Error Filter แบบ global แล้ว โมดูลอื่นไม่ต้องลงทะเบียนซ้ำ DTO ต้องใส่ decorator ของ class-validator เพื่อให้ตรวจข้อมูลได้ ฟิลด์ที่ไม่ได้ประกาศจะถูกปฏิเสธ
@@ -434,3 +473,26 @@ curl -X DELETE http://localhost:3000/api/v1/rooms/<roomId> \
 ```bash
 npm test -- rooms
 ```
+## ส่งต่องานเพื่อเริ่ม Sprint 3
+
+ผลตรวจรวมหลังรับ PR #6: Build และ ESLint ผ่าน, Unit tests 63 เคส และ E2E 72 เคสผ่านกับ MySQL/Redis ทดสอบแยก
+
+รวมงาน Users/Auth, Rooms และ Bookings/Notifications ของ Sprint 2 แล้ว ชุดตรวจรวมครอบคลุม Admin สร้างห้อง → User สมัคร/Login → ค้นหา → จอง → ดูรายการ/รายละเอียด → ยกเลิก/รับ Notification รวมถึงห้ามเข้าถึงการจองคนอื่นและปฏิเสธการจองทับซ้อน พร้อม Unit tests และ Swagger contract tests
+
+ก่อนเริ่มงานใหม่ให้เก็บงานเดิมใน branch ของตัวเอง แล้วอัปเดตฐานจาก main:
+
+```bash
+git switch main
+git pull --ff-only origin main
+npm ci
+npx prisma generate
+docker compose up -d
+# รอ MySQL และ Redis healthy
+npx prisma migrate deploy
+git switch -c feat/your-sprint3-task
+npm run start:dev
+```
+
+ไม่ต้อง reset ฐานข้อมูลหรือแก้ migration เดิม Seed เป็นตัวเลือกสำหรับเพิ่มห้องตัวอย่างเท่านั้น งานใหม่ส่งผ่าน PR ตามกติกาทีม และให้ Shogun เป็นผู้รวมเข้า main
+
+รายการที่ยังไม่ได้ทำทั้งระบบ เช่น rate limiting และ Health check ให้จัดลำดับตามแผน Sprint 3 ของทีม สถานะนี้ยืนยันการรวมและการทดสอบ Sprint 2 ไม่ได้หมายถึงทำครบทุก requirement ของโครงการแล้ว

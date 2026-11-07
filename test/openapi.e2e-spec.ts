@@ -6,7 +6,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { RedisService } from '../src/redis/redis.service';
 
-describe('Users/Auth OpenAPI contract', () => {
+describe('Hotel Booking OpenAPI contract', () => {
   let app: INestApplication;
   let doc: OpenAPIObject;
 
@@ -152,6 +152,92 @@ describe('Users/Auth OpenAPI contract', () => {
     ).not.toHaveProperty('content');
     expect(doc.paths['/api/v1/rooms/{roomId}'].patch!.responses).toHaveProperty(
       '409',
+    );
+  });
+  it('documents Booking schemas with calendar dates, string prices and status enums', () => {
+    const schemas = doc.components!.schemas!;
+    expect(schemas.CreateBookingDto).toHaveProperty('required', [
+      'roomId',
+      'checkIn',
+      'checkOut',
+      'guests',
+    ]);
+    expect(schemas.CreateBookingDto).not.toHaveProperty('properties.userId');
+    expect(schemas.BookingResponseDto).toHaveProperty(
+      'properties.checkIn.format',
+      'date',
+    );
+    expect(schemas.BookingResponseDto).toHaveProperty(
+      'properties.pricePerNight.type',
+      'string',
+    );
+    expect(schemas.BookingResponseDto).toHaveProperty(
+      'properties.status.enum',
+      ['PENDING', 'APPROVED', 'CANCELLED', 'PAID'],
+    );
+    expect(schemas.BookingListResponseDto).toHaveProperty('properties.meta');
+    expect(schemas.UpdateBookingStatusDto).toHaveProperty(
+      'properties.status.enum',
+      ['CANCELLED'],
+    );
+    expect(schemas.NotificationResponseDto).toHaveProperty('properties.userId');
+    expect(schemas.NotificationResponseDto).not.toHaveProperty(
+      'properties.isRead',
+    );
+  });
+
+  it('documents bearer security, success and shared errors for all Booking and Notification routes', () => {
+    const paths = [
+      '/api/v1/bookings',
+      '/api/v1/bookings/{bookingId}',
+      '/api/v1/bookings/{bookingId}/status',
+      '/api/v1/admin/bookings',
+      '/api/v1/admin/bookings/{bookingId}',
+      '/api/v1/admin/bookings/{bookingId}/status',
+      '/api/v1/notifications',
+    ];
+    for (const path of paths) {
+      const operations = [
+        doc.paths[path].get,
+        doc.paths[path].post,
+        doc.paths[path].patch,
+      ].filter((operation) => operation !== undefined);
+      for (const operation of operations) {
+        expect(operation.security).toEqual([{ bearer: [] }]);
+        for (const status of ['400', '401', '503']) {
+          expect(operation.responses[status]).toHaveProperty(
+            'content.application/json.schema.$ref',
+            '#/components/schemas/ApiErrorResponseDto',
+          );
+        }
+        expect(operation.responses).toHaveProperty(
+          operation === doc.paths['/api/v1/bookings'].post ? '201' : '200',
+        );
+        if (path.includes('/admin/'))
+          expect(operation.responses).toHaveProperty('403');
+      }
+    }
+    expect(doc.paths['/api/v1/bookings'].post!.responses['201']).toHaveProperty(
+      'headers.Location',
+    );
+    expect(
+      doc.paths['/api/v1/bookings/{bookingId}/status'].patch!.responses,
+    ).toHaveProperty('409');
+  });
+
+  it('documents owner and Admin Booking filters with optional pagination', () => {
+    expect(doc.paths['/api/v1/bookings'].get!.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'status', required: false }),
+        expect.objectContaining({ name: 'page', required: false }),
+        expect.objectContaining({ name: 'limit', required: false }),
+      ]),
+    );
+    expect(doc.paths['/api/v1/admin/bookings'].get!.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'userId', required: false }),
+        expect.objectContaining({ name: 'roomId', required: false }),
+      ]),
     );
   });
 });

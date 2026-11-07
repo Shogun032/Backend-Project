@@ -342,4 +342,79 @@ describe('Rooms integration with Auth, Bookings and MySQL', () => {
     seed();
     expect(await snapshots()).toEqual(first);
   }, 50_000);
+  it('runs the full Sprint 2 flow: Admin room, register/login, search, book, ownership and cancel', async () => {
+    const room = await create();
+    const email = `sprint2-${randomUUID()}@example.com`;
+    const password = 'Sprint2FlowPassword123!';
+    const registered = await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({ name: 'Sprint 2 flow', email, password })
+      .expect(201);
+    userIds.push(body<{ id: string }>(registered).data.id);
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email, password })
+      .expect(200);
+    const token = body<{ accessToken: string }>(login).data.accessToken;
+    const search = await request(app.getHttpServer())
+      .get('/api/v1/rooms/search')
+      .query({ ...stay(), guests: 2, limit: 100 })
+      .expect(200);
+    expect(body<Room[]>(search).data.some((item) => item.id === room.id)).toBe(
+      true,
+    );
+    const input = { roomId: room.id, ...stay(), guests: 2 };
+    const booked = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .set('Authorization', auth(token))
+      .send(input)
+      .expect(201);
+    const bookingId = body<{ id: string }>(booked).data.id;
+    await request(app.getHttpServer())
+      .get(`/api/v1/bookings/${bookingId}`)
+      .set('Authorization', auth(token))
+      .expect(200);
+    const list = await request(app.getHttpServer())
+      .get('/api/v1/bookings')
+      .set('Authorization', auth(token))
+      .expect(200);
+    expect(body<{ id: string }[]>(list).data.map((item) => item.id)).toContain(
+      bookingId,
+    );
+    for (const method of ['get', 'patch'] as const) {
+      await request(app.getHttpServer())
+        [method](
+          `/api/v1/bookings/${bookingId}${method === 'patch' ? '/status' : ''}`,
+        )
+        .set('Authorization', auth(userToken))
+        .send(method === 'patch' ? { status: 'CANCELLED' } : undefined)
+        .expect(404);
+    }
+    await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .set('Authorization', auth(userToken))
+      .send(input)
+      .expect(409);
+    await request(app.getHttpServer())
+      .patch(`/api/v1/bookings/${bookingId}/status`)
+      .set('Authorization', auth(token))
+      .send({ status: 'CANCELLED' })
+      .expect(200);
+    const notifications = await request(app.getHttpServer())
+      .get('/api/v1/notifications')
+      .set('Authorization', auth(token))
+      .expect(200);
+    expect(
+      body<{ type: string }[]>(notifications)
+        .data.map((item) => item.type)
+        .sort(),
+    ).toEqual(['BOOKING_CANCELLED', 'BOOKING_CREATED']);
+    const available = await request(app.getHttpServer())
+      .get('/api/v1/rooms/search')
+      .query({ ...stay(), guests: 2, limit: 100 })
+      .expect(200);
+    expect(
+      body<Room[]>(available).data.some((item) => item.id === room.id),
+    ).toBe(true);
+  });
 });
