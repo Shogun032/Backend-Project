@@ -1,6 +1,11 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { BLOCKING_STATUSES,bangkokToday,blockingOverlap,parseBookingDates } from '../bookings/booking-rules';
+import {
+  BLOCKING_STATUSES,
+  bangkokToday,
+  blockingOverlap,
+  parseBookingDates,
+} from '../bookings/booking-rules';
 import { PaginationDto, paginationMeta } from '../common/dto/pagination.dto';
 import { ApiException } from '../common/exceptions/api.exception';
 import { PrismaService } from '../prisma/prisma.service';
@@ -33,7 +38,6 @@ function roomNotFound(): ApiException {
 @Injectable()
 export class RoomsService {
   constructor(private readonly prisma: PrismaService) {}
-
 
   findAll(query: PaginationDto) {
     return this.list({ isActive: true }, query);

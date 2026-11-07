@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsOptional } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
@@ -13,5 +14,9 @@ export class AdminListRoomsDto extends PaginationDto {
     return raw;
   })
   @IsBoolean()
+  @ApiPropertyOptional({
+    type: Boolean,
+    description: 'Omit to include both active and inactive rooms',
+  })
   isActive?: boolean;
 }

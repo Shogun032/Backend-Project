@@ -27,7 +27,10 @@ describe('CreateRoomDto', () => {
     'accepts price %s',
     async (price) => {
       expect(
-        await invalidFields(CreateRoomDto, { ...validRoom, pricePerNight: price }),
+        await invalidFields(CreateRoomDto, {
+          ...validRoom,
+          pricePerNight: price,
+        }),
       ).toEqual([]);
     },
   );
@@ -36,7 +39,10 @@ describe('CreateRoomDto', () => {
     'rejects price %p',
     async (price) => {
       expect(
-        await invalidFields(CreateRoomDto, { ...validRoom, pricePerNight: price }),
+        await invalidFields(CreateRoomDto, {
+          ...validRoom,
+          pricePerNight: price,
+        }),
       ).toContain('pricePerNight');
     },
   );
@@ -80,7 +86,9 @@ describe('UpdateRoomDto', () => {
   });
 
   it('rejects null instead of silently skipping the field', async () => {
-    expect(await invalidFields(UpdateRoomDto, { name: null })).toContain('name');
+    expect(await invalidFields(UpdateRoomDto, { name: null })).toContain(
+      'name',
+    );
     expect(await invalidFields(UpdateRoomDto, { capacity: null })).toContain(
       'capacity',
     );

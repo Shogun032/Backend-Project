@@ -10,7 +10,11 @@ import { ROOM_INCLUDE } from './room.mapper';
 import { RoomsService } from './rooms.service';
 
 const ROOM_ID = '11111111-1111-4111-8111-111111111111';
-const IMAGE = { url: 'https://example.com/a.jpg', altText: 'Bed', sortOrder: 0 };
+const IMAGE = {
+  url: 'https://example.com/a.jpg',
+  altText: 'Bed',
+  sortOrder: 0,
+};
 
 function roomRow(overrides: object = {}) {
   return {
@@ -151,7 +155,7 @@ describe('RoomsService', () => {
           name: 'Deluxe Double',
           pricePerNight: '1800.00',
           images: { create: [IMAGE] },
-        }),
+        }) as unknown,
         include: ROOM_INCLUDE,
       });
       expect(result.pricePerNight).toBe('1800.00');
@@ -177,7 +181,10 @@ describe('RoomsService', () => {
       tx.room.findUnique.mockResolvedValue(null);
 
       const error = await catchApiError(
-        service.update(ROOM_ID, Object.assign(new UpdateRoomDto(), { name: 'New' })),
+        service.update(
+          ROOM_ID,
+          Object.assign(new UpdateRoomDto(), { name: 'New' }),
+        ),
       );
 
       expect(error.getStatus()).toBe(HttpStatus.NOT_FOUND);
@@ -192,18 +199,23 @@ describe('RoomsService', () => {
       tx.booking.findFirst.mockResolvedValue({ id: 'booking-1' });
 
       const error = await catchApiError(
-        service.update(ROOM_ID, Object.assign(new UpdateRoomDto(), { capacity: 2 })),
+        service.update(
+          ROOM_ID,
+          Object.assign(new UpdateRoomDto(), { capacity: 2 }),
+        ),
       );
 
       expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
-      expect(error.getResponse()).toMatchObject({ code: 'ROOM_CAPACITY_CONFLICT' });
+      expect(error.getResponse()).toMatchObject({
+        code: 'ROOM_CAPACITY_CONFLICT',
+      });
       expect(tx.booking.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             roomId: ROOM_ID,
             status: { in: BLOCKING_STATUSES },
             guests: { gt: 2 },
-          }),
+          }) as unknown,
         }),
       );
       expect(tx.room.update).not.toHaveBeenCalled();

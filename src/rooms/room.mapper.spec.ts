@@ -31,7 +31,9 @@ describe('toRoomResponse', () => {
       pricePerNight: '1800.00',
       currency: 'THB',
       isActive: true,
-      images: [{ url: 'https://example.com/a.jpg', altText: 'Bed', sortOrder: 0 }],
+      images: [
+        { url: 'https://example.com/a.jpg', altText: 'Bed', sortOrder: 0 },
+      ],
       createdAt: '2026-11-01T09:00:00.000Z',
       updatedAt: '2026-11-02T09:00:00.000Z',
     });

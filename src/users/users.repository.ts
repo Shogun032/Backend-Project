@@ -35,4 +35,34 @@ export class UsersRepository {
       throw error;
     }
   }
+
+  async updateProfile(
+    id: string,
+    data: Partial<Pick<User, 'name' | 'email'>>,
+  ): Promise<User> {
+    try {
+      return await this.prisma.user.update({
+        where: { id },
+        data,
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (
+          error.code === 'P2002' &&
+          String(error.meta?.target).includes('email')
+        ) {
+          throw new ApiException(
+            409,
+            'EMAIL_ALREADY_EXISTS',
+            'Email already exists',
+          );
+        }
+
+        if (error.code === 'P2025') {
+          throw new ApiException(404, 'RESOURCE_NOT_FOUND', 'User not found');
+        }
+      }
+      throw error;
+    }
+  }
 }
