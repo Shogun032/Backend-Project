@@ -240,4 +240,34 @@ describe('Hotel Booking OpenAPI contract', () => {
       ]),
     );
   });
+  it.each([
+    '/api/v1/rooms',
+    '/api/v1/rooms/search',
+    '/api/v1/admin/rooms',
+    '/api/v1/bookings',
+    '/api/v1/admin/bookings',
+    '/api/v1/notifications',
+  ])('documents integer pagination on %s', (path) => {
+    const parameters = doc.paths[path].get!.parameters ?? [];
+    for (const [name, defaultValue] of [
+      ['page', 1],
+      ['limit', 20],
+    ] as const) {
+      const matches = parameters.filter(
+        (parameter) => 'name' in parameter && parameter.name === name,
+      );
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toEqual({
+        name,
+        in: 'query',
+        required: false,
+        schema: {
+          type: 'integer',
+          minimum: 1,
+          default: defaultValue,
+          ...(name === 'limit' ? { maximum: 100 } : {}),
+        },
+      });
+    }
+  });
 });
