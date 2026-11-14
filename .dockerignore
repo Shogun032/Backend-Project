@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+.git
+.vscode
+.env
+.env.*
+!.env.example
+snapshot.zip
+*.pdf
+README.original.md
+docker-compose*.yml
+Dockerfile
