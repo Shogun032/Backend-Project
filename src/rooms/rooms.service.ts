@@ -1,11 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import {
-  BLOCKING_STATUSES,
-  bangkokToday,
-  blockingOverlap,
-  parseBookingDates,
-} from '../bookings/booking-rules';
+import { BLOCKING_STATUSES, bangkokToday, blockingOverlap, parseBookingDates } from '../bookings/booking-rules';
 import { PaginationDto, paginationMeta } from '../common/dto/pagination.dto';
 import { ApiException } from '../common/exceptions/api.exception';
 import { PrismaService } from '../prisma/prisma.service';
@@ -14,6 +9,15 @@ import { CreateRoomDto, RoomImageDto } from './dto/create-room.dto';
 import { SearchRoomsDto } from './dto/search-rooms.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { ROOM_INCLUDE, toRoomResponse } from './room.mapper';
+import { RedisService } from '../redis/redis.service';
+
+type RoomResponse = ReturnType<typeof toRoomResponse>;
+type RoomListResult = {
+  data: RoomResponse[];
+  meta: ReturnType<typeof paginationMeta>;
+};
+
+const ROOMS_CACHE_TTL_SECONDS = 60;
 
 function startOfBangkokToday(): Date {
   return new Date(`${bangkokToday()}T00:00:00.000Z`);
@@ -37,10 +41,21 @@ function roomNotFound(): ApiException {
 
 @Injectable()
 export class RoomsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
 
-  findAll(query: PaginationDto) {
-    return this.list({ isActive: true }, query);
+  async findAll(query: PaginationDto): Promise<RoomListResult> {
+    const version = await this.redis.getCacheVersion('rooms');
+    const key = `rooms:v${version}:list:${query.page}:${query.limit}`;
+
+    const cached = await this.redis.getJson<RoomListResult>(key);
+    if (cached) return cached;
+
+    const result = await this.list({ isActive: true }, query);
+    await this.redis.setJson(key, result, ROOMS_CACHE_TTL_SECONDS);
+    return result;
   }
 
   search(query: SearchRoomsDto) {
@@ -58,13 +73,22 @@ export class RoomsService {
     );
   }
 
-  async findOne(roomId: string) {
+  async findOne(roomId: string): Promise<RoomResponse> {
+    const version = await this.redis.getCacheVersion('rooms');
+    const key = `rooms:v${version}:detail:${roomId}`;
+
+    const cached = await this.redis.getJson<RoomResponse>(key);
+    if (cached) return cached;
+
     const room = await this.prisma.room.findFirst({
       where: { id: roomId, isActive: true },
       include: ROOM_INCLUDE,
     });
     if (!room) throw roomNotFound();
-    return toRoomResponse(room);
+
+    const response = toRoomResponse(room);
+    await this.redis.setJson(key, response, ROOMS_CACHE_TTL_SECONDS);
+    return response;
   }
 
   findAllForAdmin(query: AdminListRoomsDto) {
@@ -91,6 +115,7 @@ export class RoomsService {
       },
       include: ROOM_INCLUDE,
     });
+    await this.redis.bumpCacheVersion('rooms');
     return toRoomResponse(room);
   }
 
@@ -146,6 +171,7 @@ export class RoomsService {
       });
     });
 
+    await this.redis.bumpCacheVersion('rooms');
     return toRoomResponse(room);
   }
 
@@ -168,6 +194,8 @@ export class RoomsService {
       await tx.roomImage.deleteMany({ where: { roomId } });
       await tx.room.delete({ where: { id: roomId } });
     });
+
+    await this.redis.bumpCacheVersion('rooms');
   }
 
   private lockRoom(tx: Prisma.TransactionClient, roomId: string) {
@@ -177,7 +205,7 @@ export class RoomsService {
   private async list(
     where: Prisma.RoomWhereInput,
     { page, limit }: PaginationDto,
-  ) {
+  ): Promise<RoomListResult> {
     const [rooms, total] = await this.prisma.$transaction([
       this.prisma.room.findMany({
         where,
