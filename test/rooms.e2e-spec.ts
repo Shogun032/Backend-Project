@@ -417,4 +417,44 @@ describe('Rooms integration with Auth, Bookings and MySQL', () => {
       body<Room[]>(available).data.some((item) => item.id === room.id),
     ).toBe(true);
   });
+    it('does not serve stale cached rooms after Admin creates, updates or deactivates a room', async () => {
+    const listUrl = '/api/v1/rooms?page=1&limit=100';
+    // อุ่น cache ของ list ก่อนสร้างห้อง
+    await request(app.getHttpServer()).get(listUrl).expect(200);
+
+    const room = await create();
+    const detailUrl = `/api/v1/rooms/${room.id}`;
+    const inList = async () =>
+      body<Room[]>(await request(app.getHttpServer()).get(listUrl).expect(200))
+        .data.find((item) => item.id === room.id);
+
+    // create ต้องล้าง cache ของ list
+    expect((await inList())?.name).toBe('Integration room');
+
+    // อุ่น cache ของ detail
+    const warm = await request(app.getHttpServer()).get(detailUrl).expect(200);
+    expect(body<Room>(warm).data.name).toBe('Integration room');
+
+    // update ต้องไม่เห็นค่าเก่าทั้ง detail และ list
+    await request(app.getHttpServer())
+      .patch(detailUrl)
+      .set('Authorization', auth())
+      .send({ name: 'Cache changed', pricePerNight: '2100.00' })
+      .expect(200);
+    const changed = body<Room>(
+      await request(app.getHttpServer()).get(detailUrl).expect(200),
+    ).data;
+    expect(changed.name).toBe('Cache changed');
+    expect(changed.pricePerNight).toBe('2100.00');
+    expect((await inList())?.name).toBe('Cache changed');
+
+    // ปิดห้อง ต้อง 404 ทันที และหายจาก list
+    await request(app.getHttpServer())
+      .patch(detailUrl)
+      .set('Authorization', auth())
+      .send({ isActive: false })
+      .expect(200);
+    await request(app.getHttpServer()).get(detailUrl).expect(404);
+    expect(await inList()).toBeUndefined();
+  });
 });
