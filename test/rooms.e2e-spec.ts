@@ -1,3 +1,4 @@
+import { resetRateLimits } from './helpers/reset-rate-limits';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
@@ -72,6 +73,10 @@ describe('Rooms integration with Auth, Bookings and MySQL', () => {
       tokens.push(body<{ accessToken: string }>(login).data.accessToken);
     }
     [adminToken, userToken] = tokens;
+  });
+
+  beforeEach(() => {
+    resetRateLimits(app);
   });
 
   afterAll(async () => {

@@ -1,3 +1,4 @@
+import { resetRateLimits } from './helpers/reset-rate-limits';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
@@ -52,6 +53,10 @@ describe('Profile updates (MySQL e2e)', () => {
         body<{ data: { accessToken: string } }>(login).data.accessToken,
       );
     }
+  });
+
+  beforeEach(() => {
+    resetRateLimits(app);
   });
 
   afterAll(async () => {

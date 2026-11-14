@@ -1,3 +1,7 @@
+// Keep functional E2E counters isolated in memory; Redis sharing has its own suite.
+process.env.NODE_ENV = 'test';
+process.env.RATE_LIMIT_STORAGE = 'memory';
+process.env.TRUST_PROXY = 'false';
 import { randomBytes } from 'node:crypto';
 
 // Never let database-writing E2E tests silently use the development database.

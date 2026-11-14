@@ -1,3 +1,4 @@
+import { resetRateLimits } from './helpers/reset-rate-limits';
 import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
 import * as argon2 from 'argon2';
@@ -64,6 +65,10 @@ describe('Auth flow (e2e)', () => {
   }
 
   beforeAll(startApp);
+
+  beforeEach(() => {
+    resetRateLimits(app);
+  });
 
   afterAll(async () => {
     try {

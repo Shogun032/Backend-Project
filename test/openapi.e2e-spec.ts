@@ -270,4 +270,17 @@ describe('Hotel Booking OpenAPI contract', () => {
       });
     }
   });
+  it('documents Retry-After for the shared 429 response', () => {
+    for (const operation of [
+      doc.paths['/api/v1/auth/login'].post!,
+      doc.paths['/api/v1/bookings'].post!,
+      doc.paths['/api/v1/rooms'].get!,
+      doc.paths['/api/v1/notifications'].get!,
+    ]) {
+      expect(operation.responses['429']).toHaveProperty(
+        'headers.Retry-After.schema.type',
+        'integer',
+      );
+    }
+  });
 });

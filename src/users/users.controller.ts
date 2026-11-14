@@ -19,12 +19,17 @@ import {
 } from '@nestjs/swagger';
 import { UserResponseEnvelopeDto } from './dto/user-response.dto';
 import { ApiErrorResponses } from '../common/decorators/api-error-responses.decorator';
+import { SecurityLoggerService } from '../common/logging/security-logger.service';
+import type { RequestWithId } from '../common/types/request-with-id';
 
 @ApiTags('Users')
 @ApiBearerAuth()
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly securityLogger: SecurityLoggerService,
+  ) {}
 
   @Get('me')
   @ApiOperation({ summary: 'Get your own profile' })
@@ -107,10 +112,16 @@ export class UsersController {
     type: UserResponseEnvelopeDto,
   })
   async updateMe(
-    @Req() request: AuthenticatedRequest,
+    @Req() request: AuthenticatedRequest & RequestWithId,
     @Body() dto: UpdateProfileDto,
   ) {
     const user = await this.usersService.updateProfile(request.user.id, dto);
+
+    this.securityLogger.log(
+      'PROFILE_UPDATE_SUCCESS',
+      request.requestId,
+      user.id,
+    );
 
     return {
       data: user,

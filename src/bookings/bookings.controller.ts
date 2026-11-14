@@ -32,6 +32,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -70,6 +71,12 @@ export class BookingsController {
     ...bookingAuthErrors,
   )
   @Post()
+  @Throttle({
+    default: {
+      limit: 10,
+      ttl: 60_000,
+    },
+  })
   @HttpCode(HttpStatus.CREATED)
   async create(
     @Req() request: AuthenticatedRequest,

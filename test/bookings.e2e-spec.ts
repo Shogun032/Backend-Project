@@ -1,3 +1,4 @@
+import { resetRateLimits } from './helpers/reset-rate-limits';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
@@ -82,6 +83,10 @@ describe('Bookings integration with Auth and MySQL', () => {
       );
     }
     [ownerToken, otherToken, adminToken] = tokens;
+  });
+
+  beforeEach(() => {
+    resetRateLimits(app);
   });
 
   afterAll(async () => {
@@ -313,5 +318,26 @@ describe('Bookings integration with Auth and MySQL', () => {
         where: { booking: { roomId: target.id } },
       }),
     ).toBe(0);
+  });
+
+  it('protects every Admin Booking endpoint', async () => {
+    const id = randomUUID();
+
+    const routes = [
+      ['get', '/api/v1/admin/bookings'],
+      ['get', `/api/v1/admin/bookings/${id}`],
+      ['patch', `/api/v1/admin/bookings/${id}/status`],
+    ] as const;
+
+    for (const [method, path] of routes) {
+      // ไม่มี Token ต้องเข้าไม่ได้
+      await request(app.getHttpServer())[method](path).expect(401);
+
+      // มี Token แต่เป็น User ต้องเข้าไม่ได้
+      await request(app.getHttpServer())
+        [method](path)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(403);
+    }
   });
 });

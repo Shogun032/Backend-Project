@@ -1,3 +1,4 @@
+import { resetRateLimits } from './helpers/reset-rate-limits';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { spawnSync } from 'node:child_process';
@@ -22,6 +23,10 @@ describe('Local Admin creation command', () => {
     app.setGlobalPrefix('api/v1');
     prisma = module.get(PrismaService);
     await app.init();
+  });
+
+  beforeEach(() => {
+    resetRateLimits(app);
   });
 
   afterAll(async () => {

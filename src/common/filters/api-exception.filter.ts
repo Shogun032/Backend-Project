@@ -9,9 +9,11 @@ import { randomUUID } from 'node:crypto';
 import { ApiException } from '../exceptions/api.exception';
 import type { ApiErrorResponse } from '../types/api-error';
 import type { RequestWithId } from '../types/request-with-id';
+import { SecurityLoggerService } from '../logging/security-logger.service';
 
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
+  constructor(private readonly securityLogger: SecurityLoggerService) {}
   catch(exception: unknown, host: ArgumentsHost) {
     const http = host.switchToHttp();
     const request = http.getRequest<RequestWithId>();
@@ -59,6 +61,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     }
 
     const requestId = request.requestId ?? randomUUID();
+    this.securityLogger.logHttpError(status, requestId);
     response.setHeader('X-Request-Id', requestId);
 
     const body: ApiErrorResponse = {

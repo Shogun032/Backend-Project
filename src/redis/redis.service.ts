@@ -55,6 +55,22 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  async evaluate(
+    script: string,
+    keys: string[],
+    args: string[],
+  ): Promise<unknown> {
+    try {
+      if (!this.client.isReady) throw new Error('Redis unavailable');
+      return await this.client.eval(script, { keys, arguments: args });
+    } catch {
+      // Fail closed without leaking Redis credentials or script details.
+      throw new ServiceUnavailableException(
+        'Rate limiting service unavailable',
+      );
+    }
+  }
+
   async onModuleInit() {
     await this.client.connect();
   }

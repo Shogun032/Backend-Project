@@ -11,13 +11,31 @@ interface ErrorDocumentation {
 }
 
 export function ApiErrorResponses(...errors: ErrorDocumentation[]) {
+  const rateLimitError: ErrorDocumentation = {
+    status: 429,
+    code: 'RATE_LIMITED',
+    message: 'ThrottlerException: Too Many Requests',
+  };
+
+  const documentedErrors = errors.some((error) => error.status === 429)
+    ? errors
+    : [...errors, rateLimitError];
+
   return applyDecorators(
     ApiExtraModels(ApiErrorResponseDto),
-    ...errors.map(({ status, code, message, details = [] }) =>
+    ...documentedErrors.map(({ status, code, message, details = [] }) =>
       ApiResponse({
         status,
         description: message,
         headers: {
+          ...(status === 429
+            ? {
+                'Retry-After': {
+                  description: 'Seconds to wait before retrying this request',
+                  schema: { type: 'integer' as const, minimum: 1 },
+                },
+              }
+            : {}),
           'X-Request-Id': {
             description: 'Identifier for this request',
             schema: { type: 'string', format: 'uuid' },

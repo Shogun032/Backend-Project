@@ -7,6 +7,7 @@ import {
   Req,
   UseGuards,
   Res,
+  HttpException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -25,11 +26,17 @@ import {
 import { UserResponseEnvelopeDto } from '../users/dto/user-response.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { ApiErrorResponses } from '../common/decorators/api-error-responses.decorator';
+import { Throttle } from '@nestjs/throttler';
+import { SecurityLoggerService } from '../common/logging/security-logger.service';
+import type { RequestWithId } from '../common/types/request-with-id';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly securityLogger: SecurityLoggerService,
+  ) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -59,9 +66,16 @@ export class AuthController {
   })
   async register(
     @Body() dto: RegisterDto,
+    @Req() request: RequestWithId,
     @Res({ passthrough: true }) response: Response,
   ) {
     const user = await this.authService.register(dto);
+
+    this.securityLogger.log(
+      'AUTH_REGISTER_SUCCESS',
+      request.requestId,
+      user.id,
+    );
 
     response.setHeader('Location', '/api/v1/users/me');
 
@@ -72,6 +86,12 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({
+    default: {
+      limit: 5,
+      ttl: 60_000,
+    },
+  })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Log in and issue an access token' })
   @ApiOkResponse({ description: 'Login successful', type: LoginResponseDto })
@@ -83,13 +103,27 @@ export class AuthController {
       message: 'Invalid email or password',
     },
   )
-  async login(@Body() dto: LoginDto) {
-    const result = await this.authService.login(dto);
+  async login(@Body() dto: LoginDto, @Req() request: RequestWithId) {
+    try {
+      const result = await this.authService.login(dto);
 
-    return {
-      data: result,
-      message: 'Login successful',
-    };
+      this.securityLogger.log(
+        'AUTH_LOGIN_SUCCESS',
+        request.requestId,
+        result.user.id,
+      );
+
+      return {
+        data: result,
+        message: 'Login successful',
+      };
+    } catch (error) {
+      if (error instanceof HttpException && error.getStatus() === 401) {
+        this.securityLogger.log('AUTH_LOGIN_FAILURE', request.requestId);
+      }
+
+      throw error;
+    }
   }
 
   @Post('logout')
@@ -116,7 +150,15 @@ export class AuthController {
   @ApiNoContentResponse({
     description: 'ออกจากระบบสำเร็จ ไม่มี response body',
   })
-  async logout(@Req() request: AuthenticatedRequest): Promise<void> {
+  async logout(
+    @Req() request: AuthenticatedRequest & RequestWithId,
+  ): Promise<void> {
     await this.authService.logout(request.token.jti, request.token.exp);
+
+    this.securityLogger.log(
+      'AUTH_LOGOUT_SUCCESS',
+      request.requestId,
+      request.user.id,
+    );
   }
 }

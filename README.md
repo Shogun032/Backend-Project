@@ -4,7 +4,7 @@
 
 ## สถานะปัจจุบัน
 
-ทำแล้ว: Register, Login/JWT, ดู/แก้โปรไฟล์, Logout ผ่าน Redis, คำสั่งสร้าง Admin, JWT/Role Guards, Validation, Error Filter และ Request ID พร้อม Swagger ของ Users/Auth/Rooms/Bookings/Notifications
+ทำแล้ว: Register, Login/JWT, ดู/แก้โปรไฟล์, Logout ผ่าน Redis, คำสั่งสร้าง Admin, JWT/Role Guards, Validation, Error Filter และ Request ID พร้อม Swagger ของ Users/Auth/Rooms/Bookings/Notifications รวมถึง Rate limiting และ Security Log ของงานคนที่ 1 ใน Sprint 3
 
 ข้อมูลผู้ใช้บันทึกใน MySQL ผ่าน UsersRepository → PrismaService แล้ว ไม่หายเมื่อแอปรีสตาร์ต PrismaModule เปิดให้โมดูลอื่นใช้ตัวเชื่อมร่วมกัน และปิดการเชื่อมต่อเมื่อแอปถูกปิดผ่าน Nest lifecycle
 
@@ -16,12 +16,13 @@
 
 Users/Auth Sprint 2 เพิ่ม PATCH /users/me และ POST /auth/logout แล้ว Logout คืน 204 และบันทึก jti ใน Redis จน JWT หมดอายุ Guard ตรวจการเพิกถอนทุก protected request: Token ถูกเพิกถอนคืน 401 และ Redis ใช้งานไม่ได้คืน 503
 
-Rooms Sprint 2 มี Public list/detail/search และ Admin CRUD พร้อมรูปภาพ การกรองสถานะ Pagination, Swagger และ Integration tests แล้ว งานรวมระบบที่ยังค้าง: rate limiting และ Health check ใช้คำสั่งเฉพาะด้านล่างเพื่อสร้าง Admin
+Rooms Sprint 2 มี Public list/detail/search และ Admin CRUD พร้อมรูปภาพ การกรองสถานะ Pagination, Swagger และ Integration tests แล้ว ใช้คำสั่งเฉพาะด้านล่างเพื่อสร้าง Admin
 
+Security Sprint 3 เพิ่ม ThrottlerGuard ส่วนกลาง, limit เฉพาะ Login/สร้าง Booking, ตัวนับ Redis ร่วมกันใน production, Swagger 429/Retry-After, Log ของ Auth/Profile และ HTTP errors พร้อม validation Environment และ proxy แล้ว งานที่ยังค้าง ได้แก่ Health check, โครงสร้างพื้นฐาน/Deploy และการยืนยันค่ากับเซิร์ฟเวอร์จริง
 
 ## ส่งต่องาน Sprint 1 และเริ่ม Sprint 2
 
-ฐานงาน Auth, Rooms/Database และ Bookings/Notifications รวมเข้าด้วยกันแล้ว พร้อมเทสต์ regression สำหรับการเชื่อมโมดูลและคำขอพร้อมกัน ผลตรวจชุดนี้: Build/ESLint ผ่าน, Unit tests 10 เคส และ E2E กับ MySQL จริง 17 เคสผ่าน
+ฐานงาน Auth, Rooms/Database และ Bookings/Notifications รวมเข้าด้วยกันแล้ว พร้อมเทสต์ regression สำหรับการเชื่อมโมดูลและคำขอพร้อมกัน ผลทดสอบปัจจุบันดูหัวข้อ ทดสอบ ด้านล่าง
 
 หลังรับโค้ดล่าสุด ให้ commit งานใน branch ของตัวเองก่อน แล้วดึง main มารวมโดยไม่ทิ้งงานเดิม ผู้ที่อยู่ main และไม่มีงานค้างใช้:
 
@@ -37,7 +38,7 @@ npm run start:dev
 
 ต้องตั้ง `.env` ให้ตรงกับ MySQL ของเครื่องก่อนตามหัวข้อ Setup ด้านล่าง ไม่ต้อง reset ฐานข้อมูลหรือแก้ migration เดิม หลังอัปเดต schema ต้อง generate Client ใหม่เพื่อลดปัญหา Property 'user'/'booking' does not exist
 
-ให้สมาชิกแต่ละคนลอง setup/run บนเครื่องตนเองก่อนยืนยันปิด Sprint 1 การมีฐานงานพร้อมไม่ได้หมายความว่า FR ทั้งระบบเสร็จแล้ว งาน Sprint 2 ที่ยังค้างระบุไว้ในสถานะปัจจุบันข้างบน
+ให้สมาชิกแต่ละคนลอง setup/run บนเครื่องตนเองก่อนยืนยันปิด Sprint 1 การมีฐานงานพร้อมไม่ได้หมายความว่า FR ทั้งระบบเสร็จแล้ว งานรวมระบบที่ยังค้างระบุไว้ในสถานะปัจจุบันข้างบน
 
 ## Setup ครั้งแรก
 
@@ -116,7 +117,6 @@ npx prisma db seed
 ```
 
 Seed ใช้ ID คงที่สำหรับห้องตัวอย่าง 5 ห้อง เพิ่มเฉพาะห้องที่ยังไม่มี รันซ้ำไม่เพิ่มห้อง/รูปซ้ำ ไม่แก้ห้องที่มีอยู่ และไม่ลบ User, Booking หรือ Notification รูปเป็น URL ตัวอย่าง หากเคยใช้ Seed รุ่นเก่าที่สุ่ม ID ห้องเดิมจะยังอยู่ และจะเพิ่มห้องชุด ID คงที่ครั้งแรกโดยไม่ล้างข้อมูลอัตโนมัติ ดูการใช้ API ในหัวข้อ Rooms API (คนที่ 2) ด้านล่าง
-
 
 Compose เปิดพอร์ต MySQL/Redis สำหรับพัฒนาในเครื่อง ยังไม่ใช่ configuration สำหรับ deploy production
 
@@ -260,7 +260,6 @@ Notification เก็บ bookingId อย่างเดียว แล้ว�
 
 Schema จาก migration เดิมมี nights/currency ใน Booking และ isRead ใน Notification อยู่แล้ว เก็บไว้เพื่อให้ใช้กับ migration ที่ merge แล้วได้ แต่ไม่เพิ่ม mark-as-read API และไม่คืน isRead ใน response ไม่ต้อง reset ฐานข้อมูลหรือแก้ migration เก่า
 
-
 ### ตัวอย่าง Booking และ Notification
 
 Login ด้วยบัญชี User และ Admin ตามหัวข้อ Auth แล้วแทน `USER_TOKEN`, `ADMIN_TOKEN`, `ROOM_ID` และ `BOOKING_ID` ด้วยค่าจริง ตัวอย่างวันที่ต้องเปลี่ยนเป็นวันอนาคตตาม Asia/Bangkok (ยกเลิกได้ก่อนวันเช็กอินเท่านั้น)
@@ -299,6 +298,79 @@ curl -i -X PATCH http://localhost:3000/api/v1/admin/bookings/BOOKING_ID/status \
 
 Create สำเร็จได้ 201 พร้อม Location; ดู/ยกเลิกได้ 200 การใช้ ID ของคนอื่นผ่าน Owner route ได้ 404 และการจองทับซ้อนได้ 409 ROOM_UNAVAILABLE การอนุมัติ/บันทึก PAID ใช้ได้ถึงวันเช็กอินและไม่สร้าง Notification ส่วนการยกเลิกสร้าง BOOKING_CANCELLED ให้เจ้าของเพียงครั้งเดียว
 
+## Security — Sprint 3 (คนที่ 1)
+
+### Rate limiting
+
+AppModule ลงทะเบียน `ThrottlerGuard` ผ่าน `APP_GUARD` ใช้ตรวจจำนวนคำขอก่อนเข้า Controller แล้วให้ `@Throttle()` เปลี่ยน limit เฉพาะเส้นทาง กติกาปัจจุบันคือ:
+
+| เส้นทาง | จำนวนคำขอสูงสุด | ช่วงเวลา |
+| --- | --- | --- |
+| `POST /api/v1/auth/login` | 5 | 60,000 ms (1 นาที) |
+| `POST /api/v1/bookings` | 10 | 60,000 ms (1 นาที) |
+| Business endpoints อื่นที่ผ่าน Guard | 100 | 60,000 ms (1 นาที) |
+
+นับตาม IP ที่แอปเห็น (`request.ip`) แยกตาม Controller/handler ไม่ได้นับตามบัญชีผู้ใช้ และนับทั้งคำขอสำเร็จ/ล้มเหลว ผู้ใช้ที่ออกผ่าน IP เดียวกันจึงอาจใช้โควตาของเส้นทางเดียวกันร่วมกันได้
+
+เมื่อเกินกำหนดได้ HTTP 429, `error.code: RATE_LIMITED` พร้อม `Retry-After` หน่วยวินาที ให้รอตาม Header ก่อนลองใหม่ และมี `X-Request-Id` สำหรับตาม Log ตัวอย่าง Response:
+
+```json
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "ThrottlerException: Too Many Requests",
+    "details": []
+  },
+  "requestId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+Swagger ของ endpoint ที่ใช้ `@ApiErrorResponses()` มี 429 example และประกาศ `Retry-After` เป็น integer ใน response headers แล้ว
+
+ลองด้วยบัญชีทดสอบที่ไม่มีอยู่ โดยใช้ Terminal อีกแท็บขณะ API ทำงาน:
+
+```bash
+for i in {1..6}; do
+  curl -s -o /dev/null -w "Request $i: %{http_code}\n" \
+    -X POST http://localhost:3000/api/v1/auth/login \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"rate-limit-check@example.com","password":"WrongPassword123!"}'
+done
+```
+
+บนรอบที่ไม่มีคำขอเดิมค้างอยู่ 5 ครั้งแรกควรได้ 401 และครั้งที่ 6 ได้ 429 คำขอจาก Swagger/curl ที่มาจาก IP เดียวกันใช้ตัวนับเดียวกันได้ ใช้ `curl -i` เพื่อดู Header และเปลี่ยนข้อมูลตัวอย่างให้เป็นข้อมูลทดสอบเท่านั้น
+
+เลือกตัวเก็บตัวนับด้วย `RATE_LIMIT_STORAGE`: development/test ใช้ `memory` เป็นค่าเริ่มต้น ส่วน production ใช้ `redis` และจะปฏิเสธการเลือก memory ตัวเลข limit/ttl ยังกำหนดในโค้ดตามตารางข้างบน
+
+โหมด Redis ใช้ sliding window และบันทึกการนับ/ตรวจ/บล็อกด้วย Lua script ในคำสั่งเดียว ใช้เวลาจาก Redis และเก็บ key แบบมีอายุ API ทุก instance ที่ใช้ Redis DB และ `RATE_LIMIT_PREFIX` เดียวกันจึงแบ่งโควตาร่วมกัน โควตาไม่เริ่มใหม่เมื่อรีสตาร์ตเฉพาะ API; ถ้า Redis ใช้งานไม่ได้ API คืน 503 โดยไม่ข้าม Rate limiting อัตโนมัติ ส่วนโหมด memory ยังคงแยกตัวนับต่อ process และเริ่มใหม่เมื่อรีสตาร์ต
+
+Redis ตอนนี้ใช้ทั้งเพิกถอน JWT และเก็บตัวนับ Rate limit ในโหมด redis ต้องวางแผนความพร้อมใช้งาน/การเก็บข้อมูลของ Redis ด้วย เพราะการล้างข้อมูล Redis จะทำให้ทั้งตัวนับและข้อมูลเพิกถอน Token หายไป ห้ามใช้คำสั่ง FLUSHDB/FLUSHALL กับ Redis ที่ใช้ร่วมกับแอป
+
+### Security Log
+
+`LoggingModule` ลงทะเบียนและ export `SecurityLoggerService` ให้ AuthModule, UsersModule และ AppModule ใช้ร่วมกัน Log ออกทาง Nest Logger ใน Terminal ของ API; เมื่อรันใน container ให้อ่านจาก container logs ไม่ได้บันทึกลงฐานข้อมูลหรือไฟล์โดยอัตโนมัติ
+
+| เหตุการณ์ | ระดับ | จุดที่เรียก |
+| --- | --- | --- |
+| `AUTH_REGISTER_SUCCESS` | LOG | หลังสร้างผู้ใช้สำเร็จ |
+| `AUTH_LOGIN_SUCCESS` | LOG | หลัง Login และออก Token สำเร็จ |
+| `AUTH_LOGIN_FAILURE` | LOG | AuthController รับ Error 401 จาก Login |
+| `AUTH_LOGOUT_SUCCESS` | LOG | หลัง Redis บันทึกการเพิกถอน Token สำเร็จ |
+| `PROFILE_UPDATE_SUCCESS` | LOG | หลังแก้โปรไฟล์สำเร็จ |
+| `HTTP_REQUEST_REJECTED` | WARN | Error Filter รับ 403 หรือ 429 |
+| `HTTP_SERVER_ERROR` | ERROR | Error Filter รับ 5xx |
+
+Auth/Profile Log มีเฉพาะ `event`, `requestId`, `userId` โดยไม่ใส่ userId เมื่อไม่ทราบผู้ใช้ ส่วน HTTP error Log มีเฉพาะ `event`, `requestId`, `status` ไม่ส่ง request body, Authorization header, URL/query, password/hash, Token หรือ Error/stack trace ดิบเข้า Logger ตัวนี้ ตัวอย่างข้อมูล Log:
+
+```text
+{"event":"AUTH_LOGIN_SUCCESS","requestId":"request-uuid","userId":"user-uuid"}
+{"event":"HTTP_REQUEST_REJECTED","requestId":"request-uuid","status":429}
+```
+
+`AUTH_LOGIN_FAILURE` ไม่ได้ครอบคลุมทุก 401 ของระบบ: กรณี JWT Guard ปฏิเสธ Token ยังไม่ถึง AuthController และ HTTP error Log ปัจจุบันเลือกเฉพาะ 403/429/5xx ส่วน Log สำเร็จวางหลัง `await` เพื่อไม่รายงาน Success ถ้างานล้มเหลว Seed ใช้ข้อความ Error คงที่และ exit code 1 โดยรอปิด Prisma ใน `finally`
+
+API Response แยกจาก Log: Login ยังคืน `accessToken` ให้ผู้ใช้ตาม contract แต่ไม่เขียนลง Log; Register/Profile ไม่คืน password/hash และ 5xx คืนข้อความทั่วไปพร้อม requestId
+
 ## Error และ Validation กลาง
 
 AppModule ลงทะเบียน Validation Pipe และ Error Filter แบบ global แล้ว โมดูลอื่นไม่ต้องลงทะเบียนซ้ำ DTO ต้องใส่ decorator ของ class-validator เพื่อให้ตรวจข้อมูลได้ ฟิลด์ที่ไม่ได้ประกาศจะถูกปฏิเสธ
@@ -314,7 +386,7 @@ AppModule ลงทะเบียน Validation Pipe และ Error Filter แ
 }
 ```
 
-ทุกคำขอมี Header `X-Request-Id` และใน Error JSON จะใช้รหัสเดียวกัน details เป็น Array เสมอ ข้อผิดพลาด 5xx ส่งข้อความทั่วไปโดยไม่เปิดเผยรายละเอียดภายใน ขณะนี้ยังไม่ได้เพิ่มระบบ Log กลาง
+ทุกคำขอที่ผ่าน RequestIdMiddleware มี Header `X-Request-Id` และใน Error JSON จะใช้รหัสเดียวกัน details เป็น Array เสมอ ข้อผิดพลาด 5xx ส่งข้อความทั่วไปโดยไม่เปิดเผยรายละเอียดภายใน Error Filter เรียก SecurityLoggerService บันทึก 403/429/5xx โดยใช้ requestId เดียวกับ Header และ Body รายละเอียดอยู่ในหัวข้อ Security — Sprint 3
 
 ถ้าต้องระบุ business error เฉพาะ ให้ใช้:
 
@@ -328,7 +400,7 @@ throw new ApiException(409, 'ROOM_UNAVAILABLE', 'Room unavailable');
 
 ## ทดสอบ
 
-Unit tests ไม่ต้องใช้ฐานข้อมูล ส่วน E2E ใช้ MySQL และ Redis จริงแยกสำหรับทดสอบ ไม่ต้องเปิดเซิร์ฟเวอร์ API แยก
+ชุด `npm test` ประกอบด้วย Unit tests และ HTTP integration tests ที่จำลอง Service/ฐานข้อมูล จึงไม่ต้องเปิด MySQL/Redis ส่วน E2E ใช้ MySQL และ Redis จริงแยกสำหรับทดสอบ ไม่ต้องเปิดเซิร์ฟเวอร์ API แยก
 
 สร้างฐานข้อมูลสำหรับทดสอบชื่อ `hotel_booking_test` แยกจากฐานข้อมูลพัฒนา แล้วกำหนด TEST_DATABASE_URL ใน Terminal (แก้ค่าตัวอย่างให้ตรงกับ MySQL ของตัวเอง):
 
@@ -343,6 +415,7 @@ E2E ต้องมี TEST_REDIS_URL ที่ชี้ไปยัง Redis �
 
 ```bash
 npm run build
+npx eslint "{src,test}/**/*.ts"
 npm test -- --runInBand
 npm run test:e2e -- --runInBand
 ```
@@ -351,7 +424,47 @@ Unit tests ครอบคลุมวันที่ไม่จริง/อ�
 
 E2E ครอบคลุมจองพร้อมกัน, วันพักติดกัน, ราคาจองเดิมไม่เปลี่ยน, ownership, Admin status, ยกเลิกพร้อมกันไม่แจ้งซ้ำ, Notification userId/pagination และข้อมูลคงอยู่หลังสร้างแอปใหม่, สมัครพร้อมกันและ unique constraint, Register/Login/Profile, Token ผิด/ไม่มี, ADMIN ได้ 200/USER ได้ 403, Request ID, Validation, อีเมลซ้ำ, Login ผิด และการปิดบัง Error ภายใน Route `test-admin` มีเฉพาะแอปในเทสต์ ไม่ใช่ API จริง
 
-ชุดทดสอบ Users/Auth Sprint 2 ครอบคลุมแก้โปรไฟล์, email unique, สิทธิ์, Logout 204/Token เดิม 401, session อื่นยังใช้งานได้, expiry ของ key ตรงกับ JWT exp, revoked token ยังถูกปฏิเสธหลังเปิดแอปใหม่ และจำลอง Redis error ได้ 503 เพิ่ม E2E สำหรับ OpenAPI contract และคำสั่งสร้าง Admin ด้วย ผลตรวจ Users/Auth Sprint 2: Build/ESLint ผ่าน, Unit tests 14 เคส และ E2E กับ MySQL/Redis จริง 51 เคสผ่าน
+ชุดทดสอบ Users/Auth Sprint 2 ครอบคลุมแก้โปรไฟล์, email unique, สิทธิ์, Logout 204/Token เดิม 401, session อื่นยังใช้งานได้, expiry ของ key ตรงกับ JWT exp, revoked token ยังถูกปฏิเสธหลังเปิดแอปใหม่ และจำลอง Redis error ได้ 503 เพิ่ม E2E สำหรับ OpenAPI contract และคำสั่งสร้าง Admin ด้วย
+
+### ผลตรวจล่าสุดและเทสต์ Security
+
+ผลตรวจในเครื่องวันที่ 15 พ.ย. 2026 ด้วย MySQL/Redis ชุดทดสอบแยก:
+
+| การตรวจ | ผล |
+| --- | --- |
+| `npm test -- --runInBand` | 16 suites, 132 tests ผ่าน |
+| `npm run test:e2e -- --runInBand` | 9 suites, 85 tests ผ่าน |
+| TypeScript, Build และ ESLint | ผ่าน |
+| Production-mode smoke ในเครื่อง | 2 Node processes ใช้ MySQL/Redis แยก; Admin/JWT/Profile/Logout และโควตาร่วมกันผ่าน |
+
+ผลนี้รวม production mode ในเครื่อง แต่ยังไม่ใช่ผล Deploy บน public server ต้องตั้ง Secret จริง, ยืนยัน proxy/TLS และทดสอบ Authentication กับ URL จริงก่อนยืนยันงาน Deploy
+
+ไฟล์ Security ที่เพิ่มใน Sprint 3:
+
+| ไฟล์ | สิ่งที่ตรวจ |
+| --- | --- |
+| `src/auth/rate-limits.spec.ts` | HTTP requests ผ่าน AppModule/Guard จริง โดยจำลอง Service/DB: Login ครั้งที่ 6 และ Booking ที่ไม่มี Token ครั้งที่ 11 ได้ 429 พร้อม Retry-After |
+| `src/common/logging/security-logger.service.spec.ts` | ข้อมูล Log ตาม field ที่กำหนด และกรณีไม่ทราบ userId |
+| `src/auth/auth.controller.spec.ts` | Log ของ Register/Login/Logout, ไม่ใส่ข้อมูลลับ, ไม่รายงาน Success เมื่องานล้มเหลว และ Logout รอเพิกถอน Token เสร็จก่อน Log |
+| `src/users/users.controller.spec.ts` | Log ตอนแก้โปรไฟล์สำเร็จ และไม่พิมพ์ Error ดิบเมื่องานล้มเหลว |
+| `src/common/filters/api-exception.filter.spec.ts` | WARN/ERROR ตามสถานะ, การซ่อน Error ภายใน และ requestId ตรงกันใน Log/Header/Body |
+| `src/config/environment.spec.ts` | ค่า production ที่ขาด/ผิด/เป็นค่าตัวอย่าง, Secret ขั้นต่ำ, URL และ proxy ที่ไม่ปลอดภัย โดยไม่เปิดเผยค่าจริงใน Error |
+| `src/config/http.config.spec.ts` | ทดสอบ HTTP ว่าไม่เชื่อ Header จากแหล่งที่ไม่ใช่ proxy และใช้ IP ฝั่ง client ที่ถูกต้องเมื่อมี proxy ที่เชื่อถือ |
+| `src/common/rate-limit/redis-throttler.storage.spec.ts` | Redis ไม่พร้อม/ตอบผิดรูปแบบต้องปฏิเสธคำขอด้วย 503 |
+| `test/rate-limit-redis.e2e-spec.ts` | โควตาข้ามแอปพร้อมกัน, รีสตาร์ต API, Redis ล้มเหลว, proxy/header spoof และการหมดอายุ block ด้วย Redis จริง |
+
+รันเฉพาะส่วนที่ต้องการตรวจ เช่น:
+
+```bash
+npm test -- --runInBand rate-limits.spec.ts
+npm test -- --runInBand auth.controller.spec.ts users.controller.spec.ts security-logger.service.spec.ts api-exception.filter.spec.ts
+npm run test:e2e -- --runInBand auth.e2e-spec.ts profile.e2e-spec.ts logout.e2e-spec.ts bookings.e2e-spec.ts
+npm run test:e2e -- --runInBand rate-limit-redis.e2e-spec.ts
+```
+
+ชุด functional E2E เลือก memory ชัดเจนใน `test/setup-env.ts` แล้วเรียก `test/helpers/reset-rate-limits.ts` ใน `beforeEach` เพื่อล้างเฉพาะตัวนับ in-memory ของแอปทดสอบก่อนเริ่มแต่ละเคส ภายในเคสยังใช้ Guard/limit จริง ไม่มีการปิด Rate limiting หรือแก้ MySQL/Redis ใน helper นี้ เทสต์ที่ทดสอบ 429 โดยตรงเก็บตัวนับตลอดเคสเพื่อยืนยันว่าเกินกำหนดแล้วถูกบล็อก ส่วนชุด shared Redis ใช้ prefix สุ่มของตัวเองแต่ละเคส ลบเฉพาะ key ของตัวเอง และไม่เรียก helper สำหรับ memory
+
+ระหว่าง E2E อาจเห็น Security Log ระดับ ERROR ของ 500/503 จากเคสที่จงใจจำลองระบบล้มเหลว ให้ดูผล PASS/FAIL ของ Jest ประกอบ ไม่ถือว่าเป็นเทสต์ล้มเหลวเพียงเพราะมี Log ระดับ ERROR
 
 ## ทำงานร่วมกัน
 
@@ -376,7 +489,7 @@ Commit package-lock.json เสมอ ผู้รับโค้ดใช้ np
 
 เอกสารอ้างอิงใน repo: Project_Description.pdf, Hotel_Booking_API_Agreement.pdf และ Hotel_Booking_Database_Simple.pdf โครงปัจจุบันเป็นฐานพัฒนา ยังไม่ใช่ระบบที่ทำครบทุกข้อในเอกสาร
 
-ผลตรวจรวม Rooms + Users/Auth Sprint 2: Build/ESLint ผ่าน, Unit tests 47 เคส และ E2E 68 เคสกับ MySQL/Redis แยกสำหรับทดสอบ ครอบคลุม Rooms CRUD/รูปภาพ, สิทธิ์ Admin, ห้องปิดใช้งาน, Search/วันพักติดกัน/การยกเลิก, Validation/Pagination, ป้องกันลดความจุและลบห้องที่มีการจอง, Swagger และ Seed ที่รันซ้ำโดยรักษาข้อมูลเดิม
+ชุดทดสอบ Rooms ครอบคลุม CRUD/รูปภาพ, สิทธิ์ Admin, ห้องปิดใช้งาน, Search/วันพักติดกัน/การยกเลิก, Validation/Pagination, ป้องกันลดความจุและลบห้องที่มีการจอง, Swagger และ Seed ที่รันซ้ำโดยรักษาข้อมูลเดิม ดูผลตรวจล่าสุดในหัวข้อ ทดสอบ
 
 ## Rooms API (คนที่ 2)
 
@@ -417,7 +530,7 @@ Seed เพิ่มเฉพาะห้องตัวอย่าง ID ค�
 curl "http://localhost:3000/api/v1/rooms?page=1&limit=20"
 
 # ค้นห้องว่าง
-curl "http://localhost:3000/api/v1/rooms/search?checkIn=2026-11-10&checkOut=2026-11-12&guests=2"
+curl "http://localhost:3000/api/v1/rooms/search?checkIn=2027-01-10&checkOut=2027-01-12&guests=2"
 
 # ADMIN สร้างห้อง
 curl -X POST http://localhost:3000/api/v1/rooms \
@@ -473,9 +586,10 @@ curl -X DELETE http://localhost:3000/api/v1/rooms/<roomId> \
 ```bash
 npm test -- rooms
 ```
-## ส่งต่องานเพื่อเริ่ม Sprint 3
 
-ผลตรวจรวมหลังรับ PR #6: Build และ ESLint ผ่าน, Unit tests 63 เคส และ E2E 72 เคสผ่านกับ MySQL/Redis ทดสอบแยก
+## ทำงานต่อใน Sprint 3
+
+ฐาน Sprint 2 รวมแล้ว และเพิ่มงาน Security ของคนที่ 1 ตามรายละเอียดในหัวข้อ Security — Sprint 3 ผลทดสอบล่าสุดอยู่ในหัวข้อ ทดสอบ
 
 รวมงาน Users/Auth, Rooms และ Bookings/Notifications ของ Sprint 2 แล้ว ชุดตรวจรวมครอบคลุม Admin สร้างห้อง → User สมัคร/Login → ค้นหา → จอง → ดูรายการ/รายละเอียด → ยกเลิก/รับ Notification รวมถึงห้ามเข้าถึงการจองคนอื่นและปฏิเสธการจองทับซ้อน พร้อม Unit tests และ Swagger contract tests
 
@@ -495,4 +609,58 @@ npm run start:dev
 
 ไม่ต้อง reset ฐานข้อมูลหรือแก้ migration เดิม Seed เป็นตัวเลือกสำหรับเพิ่มห้องตัวอย่างเท่านั้น งานใหม่ส่งผ่าน PR ตามกติกาทีม และให้ Shogun เป็นผู้รวมเข้า main
 
-รายการที่ยังไม่ได้ทำทั้งระบบ เช่น rate limiting และ Health check ให้จัดลำดับตามแผน Sprint 3 ของทีม สถานะนี้ยืนยันการรวมและการทดสอบ Sprint 2 ไม่ได้หมายถึงทำครบทุก requirement ของโครงการแล้ว
+งานที่ยังต้องทำร่วมกันก่อนปิด Sprint 3 คือ Health check/โครงสร้างพื้นฐาน, การตรวจ Environment และ Secrets สำหรับ production, การตรวจ proxy/ตัวนับ Rate limit, การรีวิวงานเพื่อนอย่างน้อยคนละ 1 โมดูล และการทดสอบบนเซิร์ฟเวอร์จริงร่วมกัน ผลทดสอบในเครื่องยังไม่ใช่การยืนยันว่า Deploy สำเร็จหรือทำครบทุก requirement ของโครงการ
+
+## เตรียม Environment และ Security สำหรับ Deploy
+
+Project Description กำหนดให้ใช้ Docker และ Deploy ไปยังเซิร์ฟเวอร์ที่ให้มาหรือ public server พร้อม URL และขั้นตอนใน README ไม่ได้บังคับผู้ให้บริการ, Nginx หรือหลาย instance รายละเอียดในเอกสารหน้า 2 และ Task 7–8 หน้า 3–4 ให้คนที่ 2 ยืนยันโครงสร้างพื้นฐานจริงก่อนตั้งค่า proxy
+
+ใช้ `deploy/production.env.example` เป็นแม่แบบที่ไม่มี Secret จริง ค่าตัวอย่างตั้งใจให้ไม่ผ่าน validation จนกว่าจะใส่ค่าจริง ห้าม commit Environment ของเซิร์ฟเวอร์หรือฝัง Secret ใน Dockerfile/image ให้ส่งค่าผ่านระบบ Secrets/Environment ของผู้ให้บริการหรือ Docker `--env-file` ที่เก็บนอก source code
+
+| ค่า | กติกาที่ตรวจตอนเริ่มแอป |
+| --- | --- |
+| `NODE_ENV` | development/test/production; ตั้ง production จากภายนอก process เพื่อไม่ให้ Nest ConfigModule โหลด `.env` ของเครื่องพัฒนา |
+| `PORT` | จำนวนเต็ม 1–65535; ค่าเริ่มต้น 3000 |
+| `JWT_SECRET` | ห้ามว่างหรือใช้ค่าตัวอย่าง; production ต้องอย่างน้อย 32 bytes ให้ใช้ค่าสุ่มและใช้ค่าเดียวกันทุก API instance |
+| `JWT_EXPIRES_IN` | จำนวนเต็มบวก หน่วยวินาที; ค่าเริ่มต้น 900 |
+| `DATABASE_URL` | MySQL URL ที่เลือกฐานข้อมูล; production ต้องมี username/password ที่ไม่ใช่ค่าตัวอย่าง |
+| `REDIS_URL` | redis:// หรือ rediss://; production ต้องมี password ที่ไม่ใช่ค่าตัวอย่าง และต้องเปิด authentication ฝั่ง Redis ให้ตรงกัน |
+| `RATE_LIMIT_STORAGE` | memory/redis; production เริ่มต้นเป็น redis และปฏิเสธ memory |
+| `RATE_LIMIT_PREFIX` | ค่าเดียวกันทุก instance ใน environment เดียวกัน แยกจาก staging/test; อนุญาตตัวอักษร ตัวเลข `:` `_` `-` สูงสุด 100 ตัวอักษร |
+| `TRUST_PROXY` | ค่าเริ่มต้น false; รับ loopback หรือรายการ IP/CIDR ของ proxy จริง คั่นด้วย comma; ไม่รับ true, hop count, `0.0.0.0/0` หรือ `::/0` |
+
+การตรวจค่าไม่ใส่ค่าที่กรอกลงในข้อความ Error จึงไม่ควรพิมพ์ `process.env` หรือ Connection URL เพื่อ debug รหัสผ่านที่มีอักขระพิเศษใน URL ต้อง URL-encode ก่อน เก็บฐานข้อมูล/Redis ไว้ในเครือข่ายที่เหมาะสมและกำหนดสิทธิ์ผู้ใช้บริการให้พอดี ใช้ rediss:// เมื่อการเชื่อมต่อ Redis ต้องผ่าน TLS
+
+### Proxy และ HTTPS
+
+เมื่อยังไม่ทราบรูปแบบ Deploy ให้คง `TRUST_PROXY=false` ไว้ หากแอปอยู่หลัง reverse proxy ให้ตั้งเฉพาะ IP/CIDR ของ proxy ที่เข้าถึงแอปจริง เช่น `TRUST_PROXY=10.20.0.2` หรือ loopback เมื่อ proxy เชื่อมผ่าน loopback จริง ตัวอย่างไม่ใช่ค่าที่ใช้ได้กับทุกเซิร์ฟเวอร์
+
+proxy ต้องจัดการ/เขียนทับ Forwarded headers ให้ถูกต้อง และควรจำกัดทางเข้า API ให้รับจาก proxy ที่กำหนด การตั้ง trust proxy เพียงอย่างเดียวไม่ได้ป้องกันการเข้าถึง API โดยตรง ต้องยืนยันเส้นทางเครือข่ายจริงร่วมกับคนที่ 2 แอปใช้ client IP ที่ใกล้กับฝั่งแอปและยังไม่ถูกกำหนดให้เชื่อถือ ไม่เชื่อค่า X-Forwarded-For ฝั่งซ้ายสุดโดยอัตโนมัติ
+
+ให้บริการ URL ภายนอกผ่าน HTTPS และตรวจ TLS termination ที่ proxy/แพลตฟอร์มจริง โค้ดยังไม่ได้ใส่ใบรับรองหรือบังคับ HTTPS redirect เพราะยังไม่ได้กำหนดผู้ให้บริการและรูปแบบ proxy
+
+อ้างอิงการตั้งค่า: [Express behind proxies](https://expressjs.com/en/guide/behind-proxies/), [NestJS rate limiting](https://docs.nestjs.com/security/rate-limiting), [Redis Lua scripts และ atomic execution](https://redis.io/docs/latest/develop/programmability/eval-intro/)
+
+### คำสั่งของแอปเมื่อใช้ Environment จากระบบ Deploy
+
+```bash
+# ขั้น Build; รัน migration ในขั้น Deploy กับฐานข้อมูลเป้าหมายตามแผนทีม
+npm ci
+npx prisma generate
+npm run build
+
+# ระบบ Deploy ต้อง inject Environment และ Secret จริงก่อนรัน
+npm run start:prod
+```
+
+ผล Build ปัจจุบันอยู่ที่ `dist/src/main.js` เพราะมี scripts/seed อยู่ในโปรเจกต์ด้วย `start:prod` ชี้มาที่ไฟล์นี้แล้ว หากต้องสร้าง Admin บนเซิร์ฟเวอร์ ให้ส่ง ADMIN_NAME/ADMIN_EMAIL/ADMIN_PASSWORD ชั่วคราวให้คำสั่ง `npm run admin:create:prod` ซึ่งใช้ไฟล์ Build `dist/scripts/create-admin.js` ไม่ต้องใช้ ts-node และไม่เขียนทับบัญชีที่มีอยู่ นำ ADMIN_* ออกจาก Environment ของงานนั้นเมื่อเสร็จ
+
+API instances ต้องใช้ MySQL/Redis ที่ตั้งใจแชร์, JWT_SECRET เดียวกัน และ RATE_LIMIT_PREFIX เดียวกัน การรักษาข้อมูลเพิกถอน JWT และตัวนับขึ้นอยู่กับ Redis persistence/availability ที่คนที่ 2 เตรียม การทดสอบนี้ยืนยันการรีสตาร์ตเฉพาะ API ไม่ได้ยืนยันการคงข้อมูลหลัง Redis ถูกล้างหรือรีสตาร์ตโดยไม่มี persistence
+
+### สิ่งที่ยังต้องยืนยันบนเซิร์ฟเวอร์จริง
+
+- ผู้ให้บริการ, จำนวน instance และ proxy/TLS ที่ใช้จริง พร้อม URL ของ API/Swagger
+- Environment/Secret จริง, การเข้าถึง MySQL/Redis และการเก็บข้อมูลของบริการเหล่านั้น
+- ทดสอบ Login/Profile/Admin/Logout และ Token ที่หมดอายุ/ถูกเพิกถอนผ่าน URL ภายนอก
+- ทดสอบ 429 และ Retry-After จาก client จริง และข้าม instance หากมีหลายตัว
+- คนที่ 2 จัดทำ production Dockerfile/Compose/Health check ตามงานทีม และบันทึกขั้นตอน Deploy จริง; โค้ดใน branch นี้ยังไม่ได้สร้างส่วนเหล่านั้นแทน

@@ -1,3 +1,4 @@
+import { resetRateLimits } from './helpers/reset-rate-limits';
 import { INestApplication, ServiceUnavailableException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
@@ -61,6 +62,10 @@ describe('Logout with real MySQL and Redis', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
+  beforeEach(() => {
+    resetRateLimits(app);
+  });
+
   afterAll(async () => {
     try {
       if (userId && prisma)
